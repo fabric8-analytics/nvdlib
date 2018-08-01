@@ -1,11 +1,12 @@
-import asyncio
 import datetime
+import gc
 import gzip
-import hashlib
 import io
 import json
 import os
 import requests
+import sys
+import typing
 
 from nvdlib import model, utils
 
@@ -27,10 +28,10 @@ class NVD(object):
 
         self._feeds = ()
         if feed_names:
-            self._feeds = tuple(JsonFeed(x) for x in feed_names)
+            self._feeds = tuple(JSONFeed(x) for x in feed_names)
         else:
             this_year = datetime.datetime.now().year
-            self._feeds = tuple(JsonFeed(str(x)) for x in range(2002, this_year))
+            self._feeds = tuple(JSONFeed(str(x)) for x in range(2002, this_year))
 
     def update(self):
         """Update feeds."""
@@ -85,32 +86,82 @@ class JSONFeed(object):
 
     _DATA_URL_TEMPLATE = 'https://static.nvd.nist.gov/feeds/json/cve/1.0/nvdcve-1.0-{feed}.json.gz'
 
-    def __init__(self, feed_name, data_dir=None):
+    def __init__(self, feed_name, data_dir=None, load=False, update=False):
         self._name = feed_name
+        self._data = None
 
         self._data_dir = data_dir or _DEFAULT_DATA_DIR
+
+        self._data_url = self._DATA_URL_TEMPLATE.format(feed=self._name)
         self._data_filename = 'nvdcve-1.0-{feed}.json'.format(feed=self._name)
         self._data_path = os.path.join(self._data_dir, self._data_filename)
-        self._data_url = self._DATA_URL_TEMPLATE.format(feed=self._name)
 
-        self._metadata = JSONFeedMetadata(self._name, self._data_dir)
+        self._metadata = JSONFeedMetadata(
+            feed_name=self._name,
+            data_dir=self._data_dir
+        )
+
+        self._is_downloaded = not update and os.path.isfile(self._data_path)
+        self._is_loaded = False
+
+        if load:
+            if not self._is_downloaded:
+                self.download(load=True)
+            else:
+                self.__load()
+
+        # instance-bound methods
+        self.load = self.__load
+
+    @property
+    def data(self):
+        return self._data
+
+    @property
+    def sha256(self):
+        return utils.compute_sha256(self._data_path)
+
+    @property
+    def filename(self):
+        return self._data_filename
+
+    @property
+    def path(self):
+        return self._data_path
+
+    def is_loaded(self):
+        return self._is_loaded
+
+    def is_downloaded(self):
+        return self._is_downloaded
+
+    def is_ready(self):
+        return self._is_downloaded and self._is_loaded
 
     @property
     def name(self):
         return self._name
 
-    def downloaded(self):
-        return os.path.exists(self._data_path) and os.path.isfile(self._data_path)
+    def download(self, load=False):
+        # get current metadata
+        self._metadata.fetch()
+        self._metadata.parse()
 
-    def download(self):
-        self._metadata.update()
-
-        if self.downloaded():
-            data_sha256 = self._compute_sha256()
+        if self._is_downloaded:
+            # check sha256
+            data_sha256 = utils.compute_sha256(self.path)
             if data_sha256 == self._metadata.sha256:
-                # already up-to-date
-                return
+                # already up to date
+                print(f"Feed `{self._name}` is already up to date.", file=sys.stderr)
 
+                if load:
+                    self.load()
+
+                return self
+
+        self._metadata.save()
+
+        print('Downloading ...', file=sys.stderr)
         response = requests.get(self._data_url)
         if response.status_code != 200:
             raise IOError('Unable to download {feed} feed.'.format(feed=self._name))
@@ -122,35 +173,40 @@ class JSONFeed(object):
         json_file = gzip.GzipFile(fileobj=gzip_file, mode='rb')
 
         with open(self._data_path, 'wb') as f:
-            f.write(json_file.read())
+            stream = json_file.read()
+            f.write(stream)
+            if load:
+                self._data = json.loads(stream)
+                self._is_loaded = True
 
-    def cves(self):
-        # TODO: stream the json(?), cache in memory
-        with open(self._data_path, 'r', encoding='utf-8') as f:
-            data = json.load(f).get('CVE_Items', [])
+        self._is_downloaded = True
 
-        for cve_dict in data:
-            cve = model.CVE.from_dict(cve_dict)
-            yield cve
+        return self
 
-    def get_cve(self, cve_id):
-        for cve in self.cves():
-            if cve.cve_id == cve_id:
-                return cve
-        return None
+    @classmethod
+    def load(cls, feed_name=None, data_dir: str = None):
+        """Load the JSON feed into memory and return JSONFeed object."""
+        return cls(feed_name=feed_name, data_dir=data_dir, load=True, update=False)
 
-    def _compute_sha256(self):
-        sha256 = hashlib.sha256()
-        with open(self._data_path, 'rb') as f:
-            while True:
-                data = f.read(4096)
-                if not data:
-                    break
-                sha256.update(data)
-        return sha256.hexdigest().lower()
+    def __load(self):
+        """Load an existing feed into memory.
 
-    def __str__(self):
-        return self.name
+        NOTE: The feed has to be present in `data_dir`.
+        """
+        if not self._is_loaded:
+            with open(self._data_path) as f:
+                self._data = json.load(f)
+                self._is_loaded = True
+
+        return self
+
+    def flush(self):
+        """Flush the data held by JSONFeed and garbage collect to release memory."""
+        del self._data
+        self._data = None
+
+        # explicitly run garbage collector (just in case)
+        gc.collect()
 
 
 class JSONFeedMetadata(object):
@@ -160,6 +216,9 @@ class JSONFeedMetadata(object):
 
     def __init__(self, feed_name, data_dir=None, update=False):
         self._name = feed_name
+
+        self._data_raw = None
+        self._data = None
 
         self._data_dir = data_dir or _DEFAULT_DATA_DIR
 
@@ -173,27 +232,34 @@ class JSONFeedMetadata(object):
         self._gz_size: int = None
         self._sha256: str = None
 
-        self._is_downloaded = os.path.exists(self._metadata_path) and os.path.isfile(self._metadata_path)
-
+        self._is_downloaded = os.path.isfile(self._metadata_path)
         self._is_parsed = False
 
         if self._is_downloaded:
             with open(self._metadata_path, 'r') as f:
-                data = self.parse_metadata(f.read())
-                self.update(data)
+                self._data = f.read()
+                self._data_raw = self._data
+                metadata_dict = self.parse_metadata(self._data)
+
+                self.update(metadata_dict, save=False)
 
                 self._is_parsed = True
 
         if update:
             self.update()
 
-            self._is_parsed = True
-            self._is_downloaded = True
-
     def __str__(self):
         return "[metadata:{feed}] sha256:{sha256} ({last_modified})".format(feed=self._name,
                                                                             sha256=self._sha256,
                                                                             last_modified=self._last_modified)
+
+    @property
+    def data(self) -> typing.Union[str, dict, None]:
+        return self._data
+
+    @property
+    def raw_data(self) -> typing.Union[str, None]:
+        return self._data_raw
 
     @property
     def sha256(self):
@@ -216,25 +282,70 @@ class JSONFeedMetadata(object):
     def is_ready(self):
         return self._is_downloaded and self._is_parsed
 
-    def fetch(self) -> str:
-        """Fetch NVD Feed metadata."""
-        if not self.url_exists(self._name):
+    def fetch(self):
+        """Fetch NVD Feed metadata.
+
+        :returns: self
+        """
+        if self.url_exists(self._name):
+
+            response = requests.get(self._metadata_url)
+            if response.status_code != 200:
+                raise Exception('Unable to download {feed} feed metadata.'.format(feed=self._name))
+
+            self._data_raw = response.text
+
+        elif self.metadata_exist(self._name, self._data_dir):
+            with open(self._metadata_path) as f:
+                self._data_raw = f.read()
+
+        else:
             raise ValueError(f"Feed `{self._name}` does not exist.")
 
-        response = requests.get(self._metadata_url)
-        if response.status_code != 200:
-            raise Exception('Unable to download {feed} feed metadata.'.format(feed=self._name))
+        self._data = self._data_raw
+        self._is_downloaded = True
 
-        return response.text
+        return self
 
-    def update(self, metadata: dict = None, data_dir: str = None):
+    def parse(self):
+        """Parse metadata held by the current object.
+
+        :returns: self
+        """
+        if not self._is_parsed:
+            self._data = self.parse_metadata(self.data)
+
+        self._is_parsed = True
+
+        return self
+
+    def save(self, data_dir: str = None):
+        """Save metadata into .meta file.
+
+        :returns: self
+        """
+        if data_dir:
+            self._data_dir = data_dir
+            self._metadata_path = os.path.join(self._data_dir, self._metadata_filename)
+
+        with open(self._metadata_path, 'w') as f:
+            f.write(self._data_raw)
+
+        self._is_downloaded = True
+
+        return self
+
+    def update(self, metadata: dict = None, data_dir: str = None, save=True):
         """Fetches and updates metadata.
 
         :param metadata: dict, if not specified, fetches metadata from NVD
         :param data_dir: str, metadata directory
+        :param save: bool, whether to save metadata locally (Default: True)
 
             If not specified, uses directory used during object initialization.
             If provided, overrides permanently data directory passed during initialization.
+
+        :returns: self
         """
         if data_dir:
             self._data_dir = data_dir
@@ -243,22 +354,30 @@ class JSONFeedMetadata(object):
         os.makedirs(self._data_dir, exist_ok=True)
 
         if not metadata:
-            metadata: str = self.fetch()
+            # fetch
+            self.fetch()
 
-        data: dict = self.parse_metadata(metadata)
+            # parse
+            self.parse()
+            metadata = self.data
 
-        if not data.get('sha256'):
+            meta_exists = self.metadata_exist(
+                feed_name=self._name,
+                data_dir=self._data_dir,
+                sha256=metadata.get('sha256', None)
+            )
+
+            if not meta_exists and save:
+                self.save()
+
+        if not metadata.get('sha256'):
             raise ValueError("Invalid metadata file for {feed} data feed.".format(feed=self._name))
 
-        if not self.metadata_exist(feed_name=self._name, data_dir=self._data_dir, sha256=data['sha256']):
-            with open(self._metadata_path, 'w') as f:
-                f.write(metadata)
-
-            self._is_downloaded = True
-
-        metadata_dict = {"_{key}".format(key=x): data[x] for x in data}
-        self.__dict__.update(metadata_dict)
+        # update keys
+        self.__dict__.update({"_{key}".format(key=x): metadata[x] for x in metadata})
         self._is_parsed = True
+
+        return self
 
     @classmethod
     def url_exists(cls, feed_name):
@@ -268,7 +387,7 @@ class JSONFeedMetadata(object):
         return response.status_code == 200
 
     @classmethod
-    def metadata_exist(cls, feed_name: str, sha256: int = None, data_dir: str = None):
+    def metadata_exist(cls, feed_name: str, data_dir: str = None, sha256: str = None):
 
         data_dir = data_dir or _DEFAULT_DATA_DIR
         metadata_filename = cls._METADATA_FILE_TEMPLATE.format(feed=feed_name)
@@ -284,7 +403,7 @@ class JSONFeedMetadata(object):
         return exists
 
     @staticmethod
-    def parse_metadata(metadata):
+    def parse_metadata(metadata: str):
 
         metadata_dict = {
             'last_modified': None,

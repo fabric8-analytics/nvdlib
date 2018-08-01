@@ -1,5 +1,6 @@
 import datetime
 import os
+import psutil
 import tempfile
 import unittest
 
@@ -24,7 +25,7 @@ class TestJSONFeedMetadata(unittest.TestCase):
         self.assertIsInstance(meta, JSONFeedMetadata)
 
         # non-existing, update=False
-        feed_name = 'recent'
+        feed_name = 'modified'
         meta = JSONFeedMetadata(feed_name=feed_name, data_dir=meta_temp_dir)
 
         # meta object created
@@ -84,26 +85,26 @@ class TestJSONFeedMetadata(unittest.TestCase):
 
     def test_fetch(self):
         """Test TestJSONFeedMetadata `fetch` method."""
-        feed_name = 'recent'
+        feed_name = 'modified'
         meta_temp_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
         meta = JSONFeedMetadata(feed_name=feed_name,
                                 data_dir=meta_temp_dir)
 
-        metadata: str = meta.fetch()
+        metadata: str = meta.fetch().data
 
         self.assertIsInstance(metadata, str)
         self.assertTrue(metadata)
 
     def test_update(self):
         """Test TestJSONFeedMetadata `update` method."""
-        feed_name = 'recent'
+        feed_name = 'modified'
         meta_temp_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
         meta = JSONFeedMetadata(feed_name=feed_name,
                                 data_dir=meta_temp_dir)
 
-        metadata: str = meta.fetch()
+        metadata: str = meta.fetch().data
 
         self.assertIsInstance(metadata, str)
         self.assertTrue(metadata)
@@ -123,18 +124,88 @@ class TestJSONFeedMetadata(unittest.TestCase):
 class TestJSONFeed(unittest.TestCase):
     """Tests for JSONFeed class."""
 
-    def test_fetch(self):
+    def test_init(self):
+        """Test JSONFeed initialization."""
+        feed_name = 'sample'
+        json_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
+
+        # non-existing
+        json_feed = JSONFeed(feed_name, data_dir=json_dir)
+
+        # correct object created
+        self.assertIsInstance(json_feed, JSONFeed)
+        # non empty
+        self.assertTrue(json_feed)
+
+        # existing
+        json_feed = JSONFeed(feed_name, data_dir='data/')
+
+        # correct object created
+        self.assertIsInstance(json_feed, JSONFeed)
+        # non empty
+        self.assertTrue(json_feed)
+
+    def test_download(self):
         """Test JSONFeed `download` method."""
-        pass
+        feed_name = 'modified'
+        json_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
-    def test_write(self):
-        pass
+        # feed does not exist yet
+        json_feed = JSONFeed(feed_name, data_dir=json_dir)
 
-    def test_is_downloaded(self):
-        pass
+        self.assertIsInstance(json_feed, JSONFeed)
+        # nothing has been downloaded yet
+        self.assertTrue(not os.listdir(json_dir))
+        # feed is not ready
+        self.assertFalse(json_feed.is_ready())
+
+        json_feed.download()
+
+        self.assertTrue(json_feed.filename in os.listdir(json_dir))
+        self.assertTrue(json_feed.is_downloaded())
+        # feed should not contain any data atm
+        self.assertIsNone(json_feed.data)
+
+        # load the data
+        json_feed.load()
+
+        # should be json dict
+        self.assertIsInstance(json_feed.data, dict)
+
+    def test_load(self):
+        """Test JSONFeed `load` methods."""
+        # test factory load
+        feed_name = 'sample'
+        json_feed = JSONFeed.load(feed_name, data_dir='data/')
+
+        self.assertIsInstance(json_feed, JSONFeed)
+        self.assertIsInstance(json_feed.data, dict)
+
+        # test download-load
+        feed_name = 'modified'
+        json_feed = JSONFeed(feed_name, load=True, data_dir='data/')
+
+        self.assertIsInstance(json_feed, JSONFeed)
+        self.assertIsInstance(json_feed.data, dict)
 
     def test_flush(self):
-        pass
+        """Test JSONFeed `flush` method."""
+        feed_name = 'sample'
+        json_feed = JSONFeed.load(feed_name, data_dir='data/')
+
+        # feed should not contain any data atm
+        self.assertTrue(json_feed.data)
+
+        process = psutil.Process()
+        memory_usage = process.memory_info().rss
+
+        # flush the data
+        json_feed.flush()
+
+        self.assertIsNone(json_feed.data)
+
+        # sanity check -- lower memory usage
+        self.assertLessEqual(process.memory_info().rss, memory_usage)
 
 
 class TestNVD(unittest.TestCase):
@@ -145,4 +216,3 @@ class TestNVD(unittest.TestCase):
 
     def test_update(self):
         pass
-
