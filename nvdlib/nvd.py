@@ -1,10 +1,13 @@
+import asyncio
+import aiofiles
+import aiohttp
+import concurrent.futures
 import datetime
 import gc
 import gzip
 import io
 import json
 import os
-import requests
 import sys
 import typing
 
@@ -18,81 +21,99 @@ from nvdlib import model, utils
 _XDG_DATA_HOME = os.environ.get('XDG_DATA_HOME', os.path.join(os.environ.get('HOME', '/tmp/'), '.local/share/'))
 _DEFAULT_DATA_DIR = os.path.join(_XDG_DATA_HOME, 'nvd/')
 
+# async event loop setup
+_MAX_NUM_WORKERS = 10
 
-class NVD(object):
+_LOOP = asyncio.get_event_loop()
+_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=_MAX_NUM_WORKERS
+)
+_LOOP.set_default_executor(_EXECUTOR)
 
-    def __init__(self, data_dir=None, feed_names=None):
-        self._data_dir = _DEFAULT_DATA_DIR
-        if data_dir:
-            self._data_dir = data_dir
+# async http client setup
+_CLIENT = aiohttp.ClientSession(loop=_LOOP)
 
-        self._feeds = ()
-        if feed_names:
-            self._feeds = tuple(JSONFeed(x) for x in feed_names)
-        else:
-            this_year = datetime.datetime.now().year
-            self._feeds = tuple(JSONFeed(str(x)) for x in range(2002, this_year))
 
-    def update(self):
-        """Update feeds."""
-        for feed in self.feeds:
-            # We don't really do updates now, we just download the latest gzip.
-            feed.download()
+class JSONFeedManager(object):
 
-    def get_cve(self, cve_id):
-        """Return `model.CVE` for given CVE ID.
+    def __init__(self, feed_names: list = None, data_dir: str = None):
+        self._feeds = set(feed_names or ['recent'])
+        self._data_dir = data_dir or _DEFAULT_DATA_DIR
 
-        Returns None if the CVE record was not found in currently selected feeds.
-        """
-        parts = cve_id.split('-')
-        if len(parts) != 3:
-            raise ValueError('Invalid CVE ID format: {cve_id}'.format(cve_id=cve_id))
-
-        feed_candidates = []
-        feed_name = parts[1]
-        for f in self.feeds:
-            if f.name == feed_name or f.name in ('recent', 'modified'):
-                feed_candidates.append(f)
-
-        for feed in feed_candidates:
-            cve = feed.get_cve(cve_id)
-            if cve is not None:
-                return cve
-
-    def cves(self):
-        """Returns generator for iterating over all CVE entries in currently selected feeds."""
-        for feed in self.feeds:
-            for cve in feed.cves():
-                yield cve
+        self.feeds_check(*self._feeds, data_dir=self._data_dir)
 
     @property
     def feeds(self):
         return self._feeds
 
-    @classmethod
-    def feed_exists(cls, feed_name):
-        return JSONFeedMetadata.url_exists(feed_name)
+    def download_feeds(self, *feed_names, data_dir=None):
+        pass
+
+    def download_recent_feeds(self, data_dir=None):
+        pass
+
+    def load_feeds(self, feed_names, data_dir=None):
+        pass
 
     @classmethod
-    def from_feeds(cls, feed_names, data_dir=None):
-        return cls(data_dir=data_dir, feed_names=feed_names)
+    def feeds_check(cls, *feed_names, data_dir=None):
+        """Check feeds for name validity.
 
-    @classmethod
-    def from_recent(cls, data_dir=None):
-        return cls(feed_names=['recent'], data_dir=data_dir)
+        :raises: ValueError if any feed name is invalid
+        """
+        # remove local feeds
+        distinct_feeds = list(
+            filter(lambda f: not cls.feeds_exist(f, data_dir=data_dir), feed_names)
+        )
+
+        futures = [
+            JSONFeedMetadata.url_exists(feed)
+            for feed in distinct_feeds
+        ]
+        tasks = asyncio.gather(*futures)
+
+        results = _LOOP.run_until_complete(tasks)
+        invalid = [
+            feed for valid, feed in zip(results, distinct_feeds)
+            if not valid
+        ]
+
+        if any(invalid):
+            raise ValueError(
+                f"Invalid feeds found: {invalid}"
+            )
+
+    @staticmethod
+    def feeds_exist(*feed_names, data_dir: str = None):
+        """Check feeds whether exist locally.
+
+        :raises: ValueError if feed does not exist.
+        """
+        futures = [
+            JSONFeedMetadata.metadata_exist(feed, data_dir=data_dir)
+            for feed in feed_names
+        ]
+        tasks = asyncio.gather(*futures)
+
+        results = _LOOP.run_until_complete(tasks)
+        for valid, feed in zip(results, feed_names):
+            if not valid:
+                return False
+
+        return True
 
 
 class JSONFeed(object):
 
-    _DATA_URL_TEMPLATE = 'https://static.nvd.nist.gov/feeds/json/cve/1.0/nvdcve-1.0-{feed}.json.gz'
+    DATA_URL_TEMPLATE = 'https://static.nvd.nist.gov/feeds/json/cve/1.0/nvdcve-1.0-{feed}.json.gz'
 
-    def __init__(self, feed_name, data_dir=None, load=False, update=False):
+    def __init__(self, feed_name, data_dir=None):
         self._name = feed_name
         self._data = None
 
         self._data_dir = data_dir or _DEFAULT_DATA_DIR
 
-        self._data_url = self._DATA_URL_TEMPLATE.format(feed=self._name)
+        self._data_url = self.DATA_URL_TEMPLATE.format(feed=self._name)
         self._data_filename = 'nvdcve-1.0-{feed}.json'.format(feed=self._name)
         self._data_path = os.path.join(self._data_dir, self._data_filename)
 
@@ -101,17 +122,16 @@ class JSONFeed(object):
             data_dir=self._data_dir
         )
 
-        self._is_downloaded = not update and os.path.isfile(self._data_path)
+        self._is_downloaded = os.path.isfile(self._data_path)
         self._is_loaded = False
-
-        if load:
-            if not self._is_downloaded:
-                self.download(load=True)
-            else:
-                self.__load()
 
         # instance-bound methods
         self.load = self.__load
+        self.download = self.__download
+
+    @property
+    def name(self):
+        return self._name
 
     @property
     def data(self):
@@ -129,6 +149,44 @@ class JSONFeed(object):
     def path(self):
         return self._data_path
 
+    @classmethod
+    def download(cls,
+                 feed_name: str = None,
+                 data_dir: str = None,
+                 load=False):
+
+        feed = cls(feed_name, data_dir)
+        feed = _LOOP.run_until_complete(feed.download(load=load))
+
+        return feed
+
+    @classmethod
+    def load(cls,
+             feed_name: str = None,
+             data_dir: str = None,
+             update=False):
+        """Load an existing feed into memory.
+
+        NOTE: The feed has to be present in `data_dir`.
+        """
+        if update:
+            feed = cls.download(feed_name, data_dir)
+        else:
+            feed = cls(feed_name, data_dir)
+
+        if not feed._is_downloaded:
+            raise FileNotFoundError(
+                f"Cannot load feed: `{feed}`, "
+                f"data not present in `{data_dir}`."
+            )
+
+        if not feed._is_loaded:
+            with open(feed._data_path) as f:
+                feed._data = json.load(f)
+                feed._is_loaded = True
+
+        return feed
+
     def is_loaded(self):
         return self._is_loaded
 
@@ -138,13 +196,25 @@ class JSONFeed(object):
     def is_ready(self):
         return self._is_downloaded and self._is_loaded
 
-    @property
-    def name(self):
-        return self._name
+    async def __load(self):
+        """Load the JSON feed asynchronously into memory."""
+        if not self._is_downloaded:
+            raise FileNotFoundError(
+                f"Cannot load feed: `{self._name}`, "
+                f"data not present in `{self._data_path}`."
+            )
 
-    def download(self, load=False):
+        if not self._is_loaded:
+            async with aiofiles.open(self._data_path, 'r') as f:
+                self._data = json.loads(await f.read())
+                self._is_loaded = True
+
+        return self
+
+    async def __download(self, load=False):
+        """Download the JSON feed asynchronously and return JSONFeed object."""
         # get current metadata
-        self._metadata.fetch()
+        await self._metadata.fetch()
         self._metadata.parse()
 
         if self._is_downloaded:
@@ -159,44 +229,33 @@ class JSONFeed(object):
 
                 return self
 
-        self._metadata.save()
+        await self._metadata.save()
 
         print('Downloading ...', file=sys.stderr)
-        response = requests.get(self._data_url)
-        if response.status_code != 200:
-            raise IOError('Unable to download {feed} feed.'.format(feed=self._name))
+
+        data: bytes
+        async with _CLIENT.get(self._data_url) as response:
+            if response.status != 200:
+                raise IOError('Unable to download {feed} feed.'.format(feed=self._name))
+
+            data = await response.read()
 
         gzip_file = io.BytesIO()
-        gzip_file.write(response.content)
+        gzip_file.write(data)
         gzip_file.seek(0)
 
         json_file = gzip.GzipFile(fileobj=gzip_file, mode='rb')
 
-        with open(self._data_path, 'wb') as f:
+        async with aiofiles.open(self._data_path, 'wb') as f:
             stream = json_file.read()
-            f.write(stream)
-            if load:
-                self._data = json.loads(stream)
-                self._is_loaded = True
+            await f.write(stream)
+            await f.flush()
+
+        if load:
+            self._data = json.loads(stream)
+            self._is_loaded = True
 
         self._is_downloaded = True
-
-        return self
-
-    @classmethod
-    def load(cls, feed_name=None, data_dir: str = None):
-        """Load the JSON feed into memory and return JSONFeed object."""
-        return cls(feed_name=feed_name, data_dir=data_dir, load=True, update=False)
-
-    def __load(self):
-        """Load an existing feed into memory.
-
-        NOTE: The feed has to be present in `data_dir`.
-        """
-        if not self._is_loaded:
-            with open(self._data_path) as f:
-                self._data = json.load(f)
-                self._is_loaded = True
 
         return self
 
@@ -211,8 +270,8 @@ class JSONFeed(object):
 
 class JSONFeedMetadata(object):
 
-    _METADATA_URL_TEMPLATE = "https://nvd.nist.gov/feeds/json/cve/1.0/nvdcve-1.0-{feed}.meta"
-    _METADATA_FILE_TEMPLATE = "nvdcve-1.0-{feed}.meta"
+    METADATA_URL_TEMPLATE = "https://nvd.nist.gov/feeds/json/cve/1.0/nvdcve-1.0-{feed}.meta"
+    METADATA_FILE_TEMPLATE = "nvdcve-1.0-{feed}.meta"
 
     def __init__(self, feed_name, data_dir=None, update=False):
         self._name = feed_name
@@ -222,8 +281,8 @@ class JSONFeedMetadata(object):
 
         self._data_dir = data_dir or _DEFAULT_DATA_DIR
 
-        self._metadata_url = self._METADATA_URL_TEMPLATE.format(feed=self._name)
-        self._metadata_filename = self._METADATA_FILE_TEMPLATE.format(feed=self._name)
+        self._metadata_url = self.METADATA_URL_TEMPLATE.format(feed=self._name)
+        self._metadata_filename = self.METADATA_FILE_TEMPLATE.format(feed=self._name)
         self._metadata_path = os.path.join(self._data_dir, self._metadata_filename)
 
         self._last_modified: datetime.datetime = None
@@ -241,12 +300,12 @@ class JSONFeedMetadata(object):
                 self._data_raw = self._data
                 metadata_dict = self.parse_metadata(self._data)
 
-                self.update(metadata_dict, save=False)
+                _LOOP.run_until_complete(self.update(metadata_dict, save=False))
 
                 self._is_parsed = True
 
         if update:
-            self.update()
+            _LOOP.run_until_complete(self.update())
 
     def __str__(self):
         return "[metadata:{feed}] sha256:{sha256} ({last_modified})".format(feed=self._name,
@@ -282,22 +341,24 @@ class JSONFeedMetadata(object):
     def is_ready(self):
         return self._is_downloaded and self._is_parsed
 
-    def fetch(self):
+    async def fetch(self):
         """Fetch NVD Feed metadata.
 
         :returns: self
         """
-        if self.url_exists(self._name):
+        if await self.url_exists(self._name):
 
-            response = requests.get(self._metadata_url)
-            if response.status_code != 200:
-                raise Exception('Unable to download {feed} feed metadata.'.format(feed=self._name))
+            async with _CLIENT.get(self._metadata_url) as response:
+                if response.status != 200:
+                    raise Exception(
+                        f"Unable to download {self._name} feed metadata."
+                    )
 
-            self._data_raw = response.text
+                self._data_raw = await response.text('utf-8')
 
-        elif self.metadata_exist(self._name, self._data_dir):
-            with open(self._metadata_path) as f:
-                self._data_raw = f.read()
+        elif await self.metadata_exist(self._name, self._data_dir):
+            async with aiofiles.open(self._metadata_path) as f:
+                self._data_raw = await f.read()
 
         else:
             raise ValueError(f"Feed `{self._name}` does not exist.")
@@ -319,7 +380,7 @@ class JSONFeedMetadata(object):
 
         return self
 
-    def save(self, data_dir: str = None):
+    async def save(self, data_dir: str = None):
         """Save metadata into .meta file.
 
         :returns: self
@@ -328,14 +389,15 @@ class JSONFeedMetadata(object):
             self._data_dir = data_dir
             self._metadata_path = os.path.join(self._data_dir, self._metadata_filename)
 
-        with open(self._metadata_path, 'w') as f:
-            f.write(self._data_raw)
+        async with aiofiles.open(self._metadata_path, 'w') as f:
+            await f.write(self._data_raw)
+            await f.flush()
 
         self._is_downloaded = True
 
         return self
 
-    def update(self, metadata: dict = None, data_dir: str = None, save=True):
+    async def update(self, metadata: dict = None, data_dir: str = None, save=True):
         """Fetches and updates metadata.
 
         :param metadata: dict, if not specified, fetches metadata from NVD
@@ -355,20 +417,20 @@ class JSONFeedMetadata(object):
 
         if not metadata:
             # fetch
-            self.fetch()
+            await self.fetch()
 
             # parse
             self.parse()
             metadata = self.data
 
-            meta_exists = self.metadata_exist(
+            meta_exists = await self.metadata_exist(
                 feed_name=self._name,
                 data_dir=self._data_dir,
                 sha256=metadata.get('sha256', None)
             )
 
             if not meta_exists and save:
-                self.save()
+                await self.save()
 
         if not metadata.get('sha256'):
             raise ValueError("Invalid metadata file for {feed} data feed.".format(feed=self._name))
@@ -380,24 +442,29 @@ class JSONFeedMetadata(object):
         return self
 
     @classmethod
-    def url_exists(cls, feed_name):
-        metadata_url = cls._METADATA_URL_TEMPLATE.format(feed=feed_name)
-        response = requests.head(metadata_url)
+    async def url_exists(cls, feed_name):
+        """Asynchronously check whether url for given feed metadata exists."""
+        metadata_url = cls.METADATA_URL_TEMPLATE.format(feed=feed_name)
 
-        return response.status_code == 200
+        async with _CLIENT.head(metadata_url) as response:
+            return response.status == 200
 
     @classmethod
-    def metadata_exist(cls, feed_name: str, data_dir: str = None, sha256: str = None):
-
+    async def metadata_exist(cls, feed_name: str, data_dir: str = None, sha256: str = None):
+        """Asynchronously check whether metadata exists locally."""
         data_dir = data_dir or _DEFAULT_DATA_DIR
-        metadata_filename = cls._METADATA_FILE_TEMPLATE.format(feed=feed_name)
+
+        metadata_filename = cls.METADATA_FILE_TEMPLATE.format(feed=feed_name)
         metadata_path = os.path.join(data_dir, metadata_filename)
 
         exists = os.path.exists(metadata_path)
 
         if exists and sha256:
             # check sha265
-            parsed_existing = cls.parse_metadata(metadata_path)
+            async with aiofiles.open(metadata_path, 'r') as f:
+                metadata = await f.read()
+
+            parsed_existing = cls.parse_metadata(metadata)
             exists = sha256 == parsed_existing['sha256']
 
         return exists
