@@ -26,7 +26,9 @@ class TestJSONFeedMetadata(unittest.TestCase):
         # meta object created
         self.assertIsInstance(meta, JSONFeedMetadata)
 
+        # ---
         # non-existing, update=False
+
         feed_name = 'modified'
         meta = JSONFeedMetadata(feed_name=feed_name, data_dir=meta_temp_dir)
 
@@ -37,12 +39,14 @@ class TestJSONFeedMetadata(unittest.TestCase):
         self.assertFalse(meta.is_parsed())
         self.assertFalse(meta.is_ready())
 
+        # ---
         # non-existing, update=True
+
         meta = JSONFeedMetadata(
             feed_name=feed_name,
             data_dir=meta_temp_dir,
-            update=True
         )
+        _EVENT_LOOP.run_until_complete(meta.update())
 
         # should be ready
         self.assertTrue(meta.is_ready())
@@ -246,38 +250,15 @@ class TestJSONFeed(unittest.TestCase):
         # should be json dict
         self.assertIsInstance(json_feed.data, dict)
 
-        # ---
-        # test factory download
-
-        feed_name = 'modified'
-        json_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
-        json_feed = JSONFeed.download(
-            feed_name, data_dir=json_dir, load=True
-        )
-
-        self.assertIsInstance(json_feed, JSONFeed)
-        self.assertIsInstance(json_feed.data, dict)
-
-        # load the data
-        _EVENT_LOOP.run_until_complete(json_feed.load())
-
-        # should be json dict
-        self.assertIsInstance(json_feed.data, dict)
-
     def test_load(self):
         """Test JSONFeed `load` methods."""
-        # test factory load
+        # test load existing
+        feed_name = 'modified'
+        json_feed = JSONFeed(feed_name, data_dir='data/')
 
-        feed_name = 'sample'
-        json_feed = JSONFeed.load(feed_name, data_dir='data/')
-
-        self.assertIsInstance(json_feed, JSONFeed)
-        self.assertIsInstance(json_feed.data, dict)
-
-        # ---
-        # test async load
-
-        json_feed = JSONFeed.load(feed_name, data_dir='data/')
+        _EVENT_LOOP.run_until_complete(
+            json_feed.load()
+        )
 
         self.assertIsInstance(json_feed, JSONFeed)
         self.assertIsInstance(json_feed.data, dict)
@@ -292,17 +273,18 @@ class TestJSONFeed(unittest.TestCase):
             json_feed.download(load=True)
         )
 
-        json_feed = JSONFeed.load(feed_name, data_dir='data/')
-
         self.assertIsInstance(json_feed, JSONFeed)
         self.assertIsInstance(json_feed.data, dict)
 
     def test_flush(self):
         """Test JSONFeed `flush` method."""
         feed_name = 'sample'
-        json_feed = JSONFeed.load(feed_name, data_dir='data/')
+        json_feed = JSONFeed(feed_name, data_dir='data/')
 
-        # feed should not contain any data atm
+        # load the data
+        _EVENT_LOOP.run_until_complete(json_feed.load())
+
+        # feed should contain data already
         self.assertTrue(json_feed.data)
 
         process = psutil.Process()
@@ -322,59 +304,111 @@ class TestJSONFeedManager(unittest.TestCase):
 
     def test___init__(self):
         """Test JSONFeedManager initialization."""
+        # ---
         # default
         feed_manager = JSONFeedManager()
         self.assertIsInstance(feed_manager, JSONFeedManager)
 
-        # existing feeds, remote
-        feed_manager = JSONFeedManager(['recent', 'modified', 2002])
-        self.assertIsInstance(feed_manager, JSONFeedManager)
+        # loop is closed
+        self.assertTrue(feed_manager.event_loop.is_closed())
 
-        # existing feeds, local
-        feed_manager = JSONFeedManager(['sample'], data_dir='data/')
-        self.assertIsInstance(feed_manager, JSONFeedManager)
+        default_loop = asyncio.get_event_loop()
 
-        # non-existing feeds
-        with self.assertRaises(ValueError):
-            _ = JSONFeedManager(['non-existing'])
+        # ---
+        # as context manager (hopefully default usage)
+        with JSONFeedManager() as feed_manager:
+            self.assertIsInstance(feed_manager, JSONFeedManager)
+            # loop is running
+            self.assertFalse(feed_manager.event_loop.is_closed())
+
+            new_loop = feed_manager.event_loop
+
+            # new context loop has been created
+            self.assertNotEqual(id(new_loop), id(default_loop))
+            # context has been taken over
+            self.assertEqual(id(new_loop), id(asyncio.get_event_loop()))
+
+        # check that context has been returned
+        self.assertEqual(id(default_loop), id(asyncio.get_event_loop()))
+
+        # should close after exitting context manager
+        self.assertTrue(feed_manager.event_loop.is_closed())
 
     def test_download_feeds(self):
         """Test JSONFeedManager `download_feeds` method."""
-        pass
+        feed_names = ['recent', 'modified']
+        data_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
-    def test_download_recent_feeds(self):
-        """Test JSONFeedManager `download_recent_feeds` method."""
-        pass
+        with JSONFeedManager(data_dir=data_dir) as feed_manager:
+            # non-existing
+            feeds = feed_manager.download_feeds(feed_names)
+
+            self.assertTrue(feeds)
+            self.assertTrue(os.listdir(_TEMP_DATA_DIR))
+
+            # existing, download-load
+            feeds = feed_manager.download_feeds(['sample'],
+                                                data_dir='data/',
+                                                load=True)
+
+            self.assertTrue(feeds)
+            self.assertTrue(os.listdir(_TEMP_DATA_DIR))
+            self.assertTrue(all(feed.is_loaded() for feed in feeds))
 
     def test_load_feeds(self):
         """Test JSONFeedManager `load_feeds` method."""
-        pass
+        # non-existing feeds, download-load
+        feed_names = ['recent', 'modified']
+        data_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
+
+        with JSONFeedManager(data_dir=data_dir) as feed_manager:
+            # unloaded feeds
+            feed_manager.download_feeds(feed_names)
+
+            # loaded the downloaded feeds
+            # (maybe a lock on the tmp feed files would be a good idea
+            #  for testing unknown environment?)
+            feeds = feed_manager.load_feeds(feed_names, data_dir=data_dir)
+
+            self.assertTrue(feeds)
+            self.assertTrue(os.listdir(_TEMP_DATA_DIR))
+            self.assertTrue(all(feed.is_loaded() for feed in feeds))
+
+            # ---
+            # existing
+
+            # loaded feeds
+            feeds = feed_manager.load_feeds(['sample'], data_dir='data/')
+
+            self.assertTrue(feeds)
+            self.assertTrue(all(feed.is_loaded() for feed in feeds))
 
     def test_feeds_check(self):
         """Test JSONFeedManager `feeds_check` method."""
-        # existing
-
+        # existing feeds, remote
         feeds = ['recent', 2018]
 
         # should not raise
-        _ = JSONFeedManager.feeds_check(feeds)
+        _ = JSONFeedManager.feeds_check(*feeds)
+
+        # ---
+        # existing feeds, local
+        JSONFeedManager.feeds_check('sample', data_dir='data/')
 
         # ---
         # non-existing
-
         feeds = ['nope', 'non-existing', 0, 1E+5]
 
         # should raise
         with self.assertRaises(ValueError):
             _ = JSONFeedManager.feeds_check(*feeds)
 
-    def test_feed_exist(self):
-        """Test JSONFeedManager `feed_exist` method."""
+    def test_feeds_exist(self):
+        """Test JSONFeedManager `feeds_exist` method."""
         # existing
         feeds = ['sample']
-        _ = JSONFeedManager(feeds, data_dir='data/')
+        self.assertTrue(JSONFeedManager.feeds_exist(*feeds, data_dir='data/'))
 
         # non-existing
         feeds = ['nope', 'too-old', 0]
-        with self.assertRaises(ValueError):
-            _ = JSONFeedManager(feeds)
+        self.assertFalse(JSONFeedManager.feeds_exist(feeds))
