@@ -2,28 +2,26 @@ import asyncio
 import aiofiles
 import aiohttp
 import concurrent.futures
+
 import datetime
+
 import fcntl
 import gc
 import gzip
 import io
 import json
+
 import os
-import sys
+
+import logging
 
 import typing
 from typing import Union
 
-from nvdlib import model, utils
-
-# TODO(s):
-# - use sqlite(?) in background, working with raw JSON files is slow and it gets overly complicated
-# - better update logic
-# - logging instead of prints
+from nvdlib import config, model, utils
 
 
-_XDG_DATA_HOME = os.environ.get('XDG_DATA_HOME', os.path.join(os.environ.get('HOME', '/tmp/'), '.local/share/'))
-_DEFAULT_DATA_DIR = os.path.join(_XDG_DATA_HOME, 'nvd/')
+_LOGGER = logging.getLogger(__name__)
 
 
 class JSONFeedManager(object):
@@ -31,7 +29,7 @@ class JSONFeedManager(object):
     MAX_NUM_WORKERS = 10
 
     def __init__(self, data_dir: str = None, n_workers: int = None):
-        self._data_dir = data_dir or _DEFAULT_DATA_DIR
+        self._data_dir = data_dir or config.DEFAULT_DATA_DIR
         self._n_workers = n_workers
 
         self._feed_names: typing.Set[str] = {'recent'}
@@ -211,7 +209,7 @@ class JSONFeed(object):
         self._name = feed_name
         self._data = None
 
-        self._data_dir = data_dir or _DEFAULT_DATA_DIR
+        self._data_dir = data_dir or config.DEFAULT_DATA_DIR
 
         self._data_url = self.DATA_URL_TEMPLATE.format(feed=self._name)
         self._data_filename = 'nvdcve-1.0-{feed}.json'.format(feed=self._name)
@@ -266,7 +264,7 @@ class JSONFeed(object):
             data_sha256 = utils.compute_sha256(self.path)
             if data_sha256 == self._metadata.sha256:
                 # already up to date
-                print(f"Feed `{self._name}` is already up to date.", file=sys.stderr)
+                _LOGGER.info(f"Feed `{self._name}` is already up to date.")
 
                 if load:
                     await self.load(loop)
@@ -277,7 +275,7 @@ class JSONFeed(object):
 
         loop = loop or asyncio.get_event_loop()
 
-        print('Downloading ...', file=sys.stderr)
+        _LOGGER.info(f"Downloading feed `{self._name}`...")
 
         data: bytes
         async with aiohttp.ClientSession(loop=loop) as session:
@@ -293,7 +291,7 @@ class JSONFeed(object):
 
         json_stream = gzip.GzipFile(fileobj=gzip_file, mode='rb').read()
 
-        print('Writing ...', file=sys.stderr)
+        _LOGGER.info(f"Writing feed `{self._name}`...")
 
         async with aiofiles.open(self._data_path, 'wb', loop=loop) as f:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -307,7 +305,7 @@ class JSONFeed(object):
 
         self._is_downloaded = True
 
-        print(f"Finished downloading feed `{self._name}`", file=sys.stderr)
+        _LOGGER.info(f"Finished downloading feed `{self._name}`")
 
         return self
 
@@ -349,7 +347,7 @@ class JSONFeedMetadata(object):
         self._data_raw = None
         self._data = None
 
-        self._data_dir = data_dir or _DEFAULT_DATA_DIR
+        self._data_dir = data_dir or config.DEFAULT_DATA_DIR
 
         self._metadata_url = self.METADATA_URL_TEMPLATE.format(feed=self._name)
         self._metadata_filename = self.METADATA_FILE_TEMPLATE.format(feed=self._name)
@@ -546,7 +544,7 @@ class JSONFeedMetadata(object):
                              sha256: str = None,
                              loop: asyncio.BaseEventLoop = None):
         """Asynchronously check whether metadata exists locally."""
-        data_dir = data_dir or _DEFAULT_DATA_DIR
+        data_dir = data_dir or config.DEFAULT_DATA_DIR
 
         metadata_filename = cls.METADATA_FILE_TEMPLATE.format(feed=feed_name)
         metadata_path = os.path.join(data_dir, metadata_filename)
