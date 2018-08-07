@@ -5,7 +5,7 @@ import psutil
 import tempfile
 import unittest
 
-from nvdlib.nvd import JSONFeedManager, JSONFeed, JSONFeedMetadata
+from nvdlib.manager import FeedManager, JSONFeed, JSONFeedMetadata
 
 
 _EVENT_LOOP = asyncio.get_event_loop()
@@ -308,8 +308,8 @@ class TestJSONFeedManager(unittest.TestCase):
         """Test JSONFeedManager initialization."""
         # ---
         # default
-        feed_manager = JSONFeedManager()
-        self.assertIsInstance(feed_manager, JSONFeedManager)
+        feed_manager = FeedManager()
+        self.assertIsInstance(feed_manager, FeedManager)
 
         # loop is closed
         self.assertTrue(feed_manager.event_loop.is_closed())
@@ -318,8 +318,8 @@ class TestJSONFeedManager(unittest.TestCase):
 
         # ---
         # as context manager (hopefully default usage)
-        with JSONFeedManager() as feed_manager:
-            self.assertIsInstance(feed_manager, JSONFeedManager)
+        with FeedManager() as feed_manager:
+            self.assertIsInstance(feed_manager, FeedManager)
             # loop is running
             self.assertFalse(feed_manager.event_loop.is_closed())
 
@@ -341,7 +341,7 @@ class TestJSONFeedManager(unittest.TestCase):
         feed_names = ['recent', 'modified']
         data_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
-        with JSONFeedManager(data_dir=data_dir) as feed_manager:
+        with FeedManager(data_dir=data_dir) as feed_manager:
             # non-existing
             feeds = feed_manager.download_feeds(feed_names)
 
@@ -363,7 +363,7 @@ class TestJSONFeedManager(unittest.TestCase):
         feed_names = ['recent', 'modified']
         data_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
-        with JSONFeedManager(data_dir=data_dir) as feed_manager:
+        with FeedManager(data_dir=data_dir) as feed_manager:
             # unloaded feeds
             feed_manager.download_feeds(feed_names)
 
@@ -391,11 +391,11 @@ class TestJSONFeedManager(unittest.TestCase):
         feeds = ['recent', 2018]
 
         # should not raise
-        _ = JSONFeedManager.feeds_check(*feeds)
+        _ = FeedManager.feeds_check(*feeds)
 
         # ---
         # existing feeds, local
-        JSONFeedManager.feeds_check('sample', data_dir='data/')
+        FeedManager.feeds_check('sample', data_dir='data/')
 
         # ---
         # non-existing
@@ -403,14 +403,14 @@ class TestJSONFeedManager(unittest.TestCase):
 
         # should raise
         with self.assertRaises(ValueError):
-            _ = JSONFeedManager.feeds_check(*feeds)
+            _ = FeedManager.feeds_check(*feeds)
 
     def test_feeds_exist(self):
         """Test JSONFeedManager `feeds_exist` method."""
         # existing
         feeds = ['sample']
-        self.assertTrue(JSONFeedManager.feeds_exist(*feeds, data_dir='data/'))
+        self.assertTrue(FeedManager.feeds_exist(*feeds, data_dir='data/'))
 
         # non-existing
         feeds = ['nope', 'too-old', 0]
-        self.assertFalse(JSONFeedManager.feeds_exist(feeds))
+        self.assertFalse(FeedManager.feeds_exist(feeds))
