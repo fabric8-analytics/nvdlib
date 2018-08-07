@@ -1,3 +1,5 @@
+"""NVD JSON Feed management module."""
+
 import asyncio
 import aiofiles
 import aiohttp
@@ -9,7 +11,7 @@ import fcntl
 import gc
 import gzip
 import io
-import json
+import ujson
 
 import os
 
@@ -24,7 +26,7 @@ from nvdlib import config, model, utils
 _LOGGER = logging.getLogger(__name__)
 
 
-class JSONFeedManager(object):
+class FeedManager(object):
 
     MAX_NUM_WORKERS = 10
 
@@ -71,8 +73,8 @@ class JSONFeedManager(object):
         asyncio.set_event_loop(self._default_loop)
 
         # flush all feeds
-        for feed in self._feeds.values():
-            feed.flush()
+        for feed_name in self._feeds.keys():
+            self._feeds[feed_name].flush()
 
     @property
     def feed_names(self) -> list:
@@ -83,13 +85,16 @@ class JSONFeedManager(object):
         return self._feeds
 
     @property
-    def event_loop(self):
+    def event_loop(self) -> asyncio.BaseEventLoop:
         return self._loop
 
     def set_event_loop(self, loop: asyncio.BaseEventLoop):
         self._loop = loop
 
-    def download_feeds(self, feed_names: typing.List[Union[str, int]], data_dir: str = None, load=False):
+    def download_feeds(self,
+                       feed_names: typing.List[Union[str, int]],
+                       data_dir: str = None,
+                       load=False) -> typing.Dict[str, 'JSONFeed']:
         """Asynchronously download JSON feeds."""
         self.feeds_check(*feed_names, data_dir=data_dir)
 
@@ -103,28 +108,42 @@ class JSONFeedManager(object):
         tasks = asyncio.gather(*futures)
         feeds = self._loop.run_until_complete(tasks)
 
-        self._feed_names = set([feed.name for feed in feeds])
+        self._feed_names.update([feed.name for feed in feeds])
+
+        feeds = {feed.name: feed for feed in feeds}
 
         if load:
-            self._feeds = {feed.name: feed for feed in feeds}
+            self._feeds.update(feeds)
 
         return feeds
 
-    def download_recent_feed(self, data_dir: str = None):
+    def download_recent_feed(self, data_dir: str = None, load=False) -> 'JSONFeed':
         """Asynchronously download recent JSON feed.
 
         Convenient wrapper around `download_feeds` method.
         """
-        return self.download_feeds(['recent'], data_dir=data_dir)
+        feeds = self.download_feeds(['recent'], data_dir=data_dir, load=load)
+        recent = feeds['recent']
 
-    def download_modified_feed(self, data_dir: str = None):
+        self._feed_names.update(['recent'])
+        self._feeds.update(feeds)
+
+        return recent
+
+    def download_modified_feed(self, data_dir: str = None, load=False) -> 'JSONFeed':
         """Asynchronously download modified JSON feed.
 
         Convenient wrapper around `download_feeds` method.
         """
-        return self.download_feeds(['modified'], data_dir=data_dir)
+        feeds = self.download_feeds(['modified'], data_dir=data_dir, load=load)
+        modified = feeds['modified']
 
-    def load_feeds(self, feed_names, data_dir: str = None):
+        self._feed_names.update(['modified'])
+        self._feeds.update(feeds)
+
+        return modified
+
+    def load_feeds(self, feed_names, data_dir: str = None) -> typing.Dict[str, 'JSONFeed']:
         """Asynchronously load existing JSON feeds."""
         self.feeds_check(*feed_names, data_dir=data_dir)
 
@@ -136,6 +155,10 @@ class JSONFeedManager(object):
         ]
         tasks = asyncio.gather(*futures)
         feeds = self._loop.run_until_complete(tasks)
+        feeds = {feed.name: feed for feed in feeds}
+
+        self._feed_names.update(feed_names)
+        self._feeds.update(feeds)
 
         return feeds
 
@@ -149,7 +172,7 @@ class JSONFeedManager(object):
 
         # remove local feeds
         distinct_feeds = list(
-            filter(lambda f: not JSONFeedManager.feeds_exist(f, data_dir=data_dir, loop=loop), feed_names)
+            filter(lambda f: not FeedManager.feeds_exist(f, data_dir=data_dir, loop=loop), feed_names)
         )
 
         futures = [
@@ -194,7 +217,7 @@ class JSONFeedManager(object):
     def get_default_event_loop():
         loop = asyncio.new_event_loop()
         executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=JSONFeedManager.MAX_NUM_WORKERS
+            max_workers=FeedManager.MAX_NUM_WORKERS
         )
         loop.set_default_executor(executor)
 
@@ -300,7 +323,7 @@ class JSONFeed(object):
             fcntl.flock(f, fcntl.LOCK_UN)
 
         if load:
-            self._data = json.loads(json_stream)
+            self._data = ujson.loads(json_stream)
             self._is_loaded = True
 
         self._is_downloaded = True
@@ -321,7 +344,7 @@ class JSONFeed(object):
 
         if not self._is_loaded:
             async with aiofiles.open(self._data_path, 'r', loop=loop) as f:
-                self._data = json.loads(await f.read())
+                self._data = ujson.loads(await f.read())
                 asyncio.sleep(0.1)
                 self._is_loaded = True
 
@@ -397,6 +420,10 @@ class JSONFeedMetadata(object):
     @property
     def path(self):
         return self._metadata_path
+
+    @property
+    def last_modified(self) -> datetime.datetime:
+        return self._last_modified
 
     def is_parsed(self):
         return self._is_parsed
