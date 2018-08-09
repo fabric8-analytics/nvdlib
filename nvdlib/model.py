@@ -1,48 +1,63 @@
-"""NVD Feed data representation model."""
+"""NVD Feed data representation model.
+
+Model:
+
+    # TODO
+
+"""
 import datetime
+import operator
 import typing
 
 from abc import ABC, abstractmethod
 from collections import namedtuple
 
 
-class Entry(object):
+class Document(namedtuple('Document', [
+    'cve', 'configurations', 'impact', 'published_date', 'modified_date'
+])):
     """Representation of NVD Feed entry encapsulating other objects."""
 
-    def __init__(self, data: dict):
-        self._cve = CVE(data=data['cve'])
-        self._configurations = Configurations(data=data['configurations'])
-        self._impact = Impact(data=data['impact'])
+    # noinspection PyInitNewSignature
+    def __new__(cls,
+                cve: "CVE" = None,
+                configurations: "Configurations" = None,
+                impact: "Impact" = None,
+                published_date: datetime.datetime = None,
+                modified_date: datetime.datetime = None):
+
+        return super(Document, cls).__new__(
+            cls,
+            cve=cve,
+            configurations=configurations,
+            impact=impact,
+            published_date=published_date,
+            modified_date=modified_date
+        )
+
+    @classmethod
+    def from_data(cls, data: dict):
+        cve = CVE.from_data(data=data['cve'])
+        configurations = Configurations.from_data(data=data['configurations'])
+        impact = Impact.from_data(data=data['impact'])
 
         time_format = "%Y-%m-%dT%H:%MZ"
-        self._published_date = datetime.datetime.strptime(
+        published_date = datetime.datetime.strptime(
             data['publishedDate'],
             time_format
         )
-        self._modified_date = datetime.datetime.strptime(
+        modified_date = datetime.datetime.strptime(
             data['lastModifiedDate'],
             time_format
         )
 
-    @property
-    def cve(self) -> "CVE":
-        return self._cve
-
-    @property
-    def configurations(self) -> "Configurations":
-        return self._configurations
-
-    @property
-    def impact(self) -> "Impact":
-        return self._impact
-
-    @property
-    def published_date(self) -> datetime.datetime:
-        return self._published_date
-
-    @property
-    def modified_date(self) -> datetime.datetime:
-        return self._modified_date
+        return cls(
+            cve=cve,
+            configurations=configurations,
+            impact=impact,
+            published_date=published_date,
+            modified_date=modified_date
+        )
 
 
 class CVE(namedtuple('CVE', [
@@ -55,9 +70,9 @@ class CVE(namedtuple('CVE', [
                 id_: str = None,
                 assigner: str = None,
                 data_version: str = None,
-                affects: 'AffectsNode' = None,
-                references: 'ReferenceNode' = None,
-                descriptions: 'DescriptionNode' = None):
+                affects: 'AffectsEntry' = None,
+                references: 'ReferenceEntry' = None,
+                descriptions: 'DescriptionEntry' = None):
 
         return super(CVE, cls).__new__(
             cls,
@@ -76,12 +91,11 @@ class CVE(namedtuple('CVE', [
 
         data_version = data['data_version']
 
-        affects = AffectsNode(data['affects'])
-        references = ReferenceNode(data['references'])
-        descriptions = DescriptionNode(data['description'])
+        affects = AffectsEntry(data['affects'])
+        references = ReferenceEntry(data['references'])
+        descriptions = DescriptionEntry(data['description'])
 
-        return super(CVE, cls).__new__(
-            cls,
+        return cls(
             id_=id_,
             assigner=assigner,
             data_version=data_version,
@@ -90,7 +104,107 @@ class CVE(namedtuple('CVE', [
             descriptions=descriptions)
 
 
-class Node(ABC):
+class Configurations(namedtuple('Configurations', [
+    'cve_data_version', 'nodes'
+])):
+    """Representation of NVD Configurations object."""
+
+    # noinspection PyInitNewSignature
+    def __new__(cls,
+                cve_data_version: str = None,
+                nodes: typing.List['ConfigurationsEntry'] = None):
+
+        return super(Configurations, cls).__new__(
+            cls,
+            cve_data_version=cve_data_version,
+            nodes=nodes,
+        )
+
+    @classmethod
+    def from_data(cls, data):
+        return cls(
+            cve_data_version=data['CVE_data_version'],
+            nodes=[
+                ConfigurationsEntry(node) for node in data['nodes']
+            ]
+        )
+
+
+class Impact(namedtuple('Impact', [
+    'severity', 'exploitability_score', 'impact_score', 'cvss'
+])):
+    """Representation of NVD Configurations object."""
+
+    class CVSSNode(namedtuple('CVSSNode', [
+        'version', 'access_vector', 'access_complexity', 'authentication',
+        'confidentiality_impact', 'integrity_impact', 'availability_impact',
+        'base_score'
+    ])):
+
+        def __new__(cls,
+                    version: str = None,
+                    access_vector: str = None,
+                    access_complexity: str = None,
+                    confidentiality_impact: str = None,
+                    authentication: str = None,
+                    integrity_impact: str = None,
+                    availability_impact: str = None,
+                    base_score: float = None):
+            return super().__new__(
+                cls,
+                version=version,
+                access_vector=access_vector,
+                access_complexity=access_complexity,
+                confidentiality_impact=confidentiality_impact,
+                authentication=authentication,
+                integrity_impact=integrity_impact,
+                availability_impact=availability_impact,
+                base_score=base_score,
+            )
+
+    # noinspection PyInitNewSignature
+    def __new__(cls,
+                severity: str = None,
+                exploitability_score: float = None,
+                impact_score: float = None,
+                cvss: CVSSNode = None):
+        return super(Impact, cls).__new__(
+            cls,
+            severity=severity,
+            exploitability_score=exploitability_score,
+            impact_score=impact_score,
+            cvss=cvss
+        )
+
+    @classmethod
+    def from_data(cls, data: dict):
+        impact_data = data['baseMetricV2']
+
+        severity = impact_data['severity']
+        exploitability_score = impact_data['exploitabilityScore']
+        impact_score = impact_data['impactScore']
+
+        cvss: dict = impact_data['cvssV2']
+        cvss_modified = dict(
+            version=cvss['version'],
+            access_vector=cvss['accessVector'],
+            access_complexity=cvss['accessComplexity'],
+            confidentiality_impact=cvss['confidentialityImpact'],
+            authentication=cvss['authentication'],
+            integrity_impact=cvss['integrityImpact'],
+            availability_impact=cvss['availabilityImpact'],
+            base_score=cvss['baseScore'],
+        )
+
+        return cls(
+            severity=severity,
+            exploitability_score=exploitability_score,
+            impact_score=impact_score,
+            cvss=cls.CVSSNode(**cvss_modified)
+        )
+
+
+class Entry(ABC):
 
     def __init__(self, *data):
         self._data = [
@@ -120,7 +234,10 @@ class Node(ABC):
         return len(self._data)
 
     def __str__(self):
-        return str(self._data)
+        return f"{self.__class__.__name__}(data={str(self._data)}"
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(data={str(self._data)}"
 
     @property
     def data(self):
@@ -131,11 +248,12 @@ class Node(ABC):
         """Parse the entry relevant to the current Node class."""
 
 
-class DescriptionNode(Node):
+class DescriptionEntry(Entry):
 
-    class Description(namedtuple('Description', ['lang', 'value'])):
+    class DescriptionNode(namedtuple('DescriptionNode', ['lang', 'value'])):
 
-        def __new__(cls, lang: str, value: str):
+        # noinspection PyInitNewSignature
+        def __new__(cls, lang: str = None, value: str = None):
             return super().__new__(
                 cls,
                 lang=lang,
@@ -145,17 +263,18 @@ class DescriptionNode(Node):
     def __init__(self, data: dict):
         description_data = data['description_data']
 
-        super(DescriptionNode, self).__init__(*description_data)
+        super(DescriptionEntry, self).__init__(*description_data)
 
-    def parse(self, entry: typing.Dict[str, str]):
-        return self.Description(**entry)
+    def parse(self, entry: typing.Any):
+        return self.DescriptionNode(**entry)
 
 
-class ReferenceNode(Node):
+class ReferenceEntry(Entry):
 
-    class Reference(namedtuple('Reference', ['url', 'name', 'refsource'])):
+    class ReferenceNode(namedtuple('Reference', ['url', 'name', 'refsource'])):
 
-        def __new__(cls, url: str, name: str, refsource: str):
+        # noinspection PyInitNewSignature
+        def __new__(cls, url: str = None, name: str = None, refsource: str = None):
             return super().__new__(
                 cls,
                 url=url,
@@ -166,21 +285,25 @@ class ReferenceNode(Node):
     def __init__(self, data: dict):
         reference_data = data['reference_data']
 
-        super(ReferenceNode, self).__init__(*reference_data)
+        super(ReferenceEntry, self).__init__(*reference_data)
 
-    def parse(self, entry: typing.Dict[str, str]):
-        return self.Reference(**entry)
+    def parse(self, entry: typing.Any):
+        return self.ReferenceNode(**entry)
 
 
-class AffectsNode(Node):
+class AffectsEntry(Entry):
 
-    class Product(namedtuple('Reference', ['name', 'vendor', 'versions'])):
+    class ProductNode(namedtuple('ProductNode', ['vendor_name', 'product_name', 'versions'])):
 
-        def __new__(cls, vendor_name: str, product_name: str, versions: list):
+        # noinspection PyInitNewSignature
+        def __new__(cls,
+                    vendor_name: str = None,
+                    product_name: str = None,
+                    versions: list = None):
             return super().__new__(
                 cls,
-                name=product_name,
-                vendor=vendor_name,
+                vendor_name=vendor_name,
+                product_name=product_name,
                 versions=versions
             )
 
@@ -204,21 +327,28 @@ class AffectsNode(Node):
                     (product_name, vendor_name, version_data)
                 )
 
-        super(AffectsNode, self).__init__(*affects_data)
+        super(AffectsEntry, self).__init__(*affects_data)
 
-    def parse(self, entry: typing.Dict[str, str]):
-        return self.Product(*entry)
+    def parse(self, entry: typing.Any):
+        return self.ProductNode(*entry)
 
 
-class Configurations(object):
-    """Representation of NVD Configurations object."""
+class ConfigurationsEntry(Entry):
+
+    class ConfigurationsNode(namedtuple('ConfigurationsNode', ['vulnerable', 'cpe'])):
+
+        # noinspection PyInitNewSignature
+        def __new__(cls, vulnerable: bool = None, cpe: str = None):
+            return super().__new__(
+                cls,
+                vulnerable=vulnerable,
+                cpe=cpe
+            )
 
     def __init__(self, data: dict):
-        pass
+        self._operator = getattr(operator, f"{data['operator'].lower()}_", None)
 
+        super(ConfigurationsEntry, self).__init__(*data['cpe'])
 
-class Impact(object):
-    """Representation of NVD Impact object."""
-
-    def __init__(self, data: dict):
-        pass
+    def parse(self, entry: typing.Any):
+        return self.ConfigurationsNode(entry['vulnerable'], entry['cpe23Uri'])

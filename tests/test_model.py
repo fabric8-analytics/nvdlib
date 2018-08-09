@@ -8,16 +8,16 @@ from nvdlib import model
 SAMPLE_CVE_PATH = 'data/cve-1.0-sample.json'
 
 
-class TestEntry(unittest.TestCase):
-    """Test Entry model."""
+class TestDocument(unittest.TestCase):
+    """Test Document model."""
 
     def test___init__(self):
         """Test Entry `__init__` method."""
         with open(SAMPLE_CVE_PATH) as f:
             data = json.loads(f.read())
-        entry = model.Entry(data)
+        doc = model.Document.from_data(data)
 
-        self.assertIsInstance(entry, model.Entry)
+        self.assertIsInstance(doc, model.Document)
 
         # ---
         # test attributes
@@ -32,7 +32,7 @@ class TestEntry(unittest.TestCase):
         ]
 
         for attr, type_ in zip(attributes, expected_return_types):
-            self.assertIsInstance(getattr(entry, attr), type_)
+            self.assertIsInstance(getattr(doc, attr), type_)
 
 
 class TestCVE(unittest.TestCase):
@@ -58,55 +58,55 @@ class TestCVE(unittest.TestCase):
 
         expected_return_types = [
             str, str, str,
-            model.AffectsNode, model.ReferenceNode, model.DescriptionNode
+            model.AffectsEntry, model.ReferenceEntry, model.DescriptionEntry
         ]
 
         for attr, type_ in zip(attributes, expected_return_types):
             self.assertIsInstance(getattr(cve, attr), type_)
 
 
-class TestNodes(unittest.TestCase):
-    """Test Node subclasses."""
+class TestEntries(unittest.TestCase):
+    """Test Entries subclasses."""
 
     def test_description_node(self):
-        """Test DescriptionNode class."""
+        """Test DescriptionEntry class."""
 
         with open(SAMPLE_CVE_PATH) as f:
             data = json.loads(f.read())
             data = data['cve']['description']
 
-        desc_node = model.DescriptionNode(data)
+        desc_entry = model.DescriptionEntry(data)
 
-        self.assertIsInstance(desc_node, model.DescriptionNode)
+        self.assertIsInstance(desc_entry, model.DescriptionEntry)
 
         # test iteration and __getitem__
-        desc_next = next(desc_node)
-        desc_get = desc_node[0]
+        desc_next = next(desc_entry)
+        desc_get = desc_entry[0]
 
         for desc in [desc_next, desc_get]:
             self.assertTrue(desc)
             self.assertEqual(desc.lang, 'en')
 
         expected_iterations = 1
-        for _ in desc_node:
+        for _ in desc_entry:
             expected_iterations -= 1
 
         self.assertEqual(expected_iterations, 0)
 
-    def test_reference_node(self):
-        """Test ReferenceNode class."""
+    def test_reference_entry(self):
+        """Test ReferenceEntry class."""
 
         with open(SAMPLE_CVE_PATH) as f:
             data = json.loads(f.read())
             data = data['cve']['references']
 
-        ref_node = model.ReferenceNode(data)
+        ref_entry = model.ReferenceEntry(data)
 
-        self.assertIsInstance(ref_node, model.ReferenceNode)
+        self.assertIsInstance(ref_entry, model.ReferenceEntry)
 
         # test iteration and __getitem__
-        ref_next = next(ref_node)
-        ref_get = ref_node[0]
+        ref_next = next(ref_entry)
+        ref_get = ref_entry[0]
 
         for ref in [ref_next, ref_get]:
             self.assertTrue(ref)
@@ -115,25 +115,25 @@ class TestNodes(unittest.TestCase):
             self.assertIsInstance(ref.refsource, str)
 
         expected_iterations = 6
-        for _ in ref_node:
+        for _ in ref_entry:
             expected_iterations -= 1
 
         self.assertEqual(expected_iterations, 0)
 
-    def test_affects_node(self):
-        """Test AffectsNode class."""
+    def test_affects_entry(self):
+        """Test AffectsEntry class."""
 
         with open(SAMPLE_CVE_PATH) as f:
             data = json.loads(f.read())
             data = data['cve']['affects']
 
-        affects_node = model.AffectsNode(data)
+        affects_entry = model.AffectsEntry(data)
 
-        self.assertIsInstance(affects_node, model.AffectsNode)
+        self.assertIsInstance(affects_entry, model.AffectsEntry)
 
         # test iteration and __getitem__
-        affects_next = next(affects_node)
-        affects_get = affects_node[0]
+        affects_next = next(affects_entry)
+        affects_get = affects_entry[0]
 
         for product in [affects_next, affects_get]:
             self.assertTrue(product)
@@ -142,7 +142,7 @@ class TestNodes(unittest.TestCase):
             self.assertIsInstance(product.versions, list)
 
         expected_iterations = 5
-        for _ in affects_node:
+        for _ in affects_entry:
             expected_iterations -= 1
 
         self.assertEqual(expected_iterations, 0)
@@ -158,9 +158,23 @@ class TestConfigurations(unittest.TestCase):
             data = json.loads(f.read())
             data = data['configurations']
 
-        config = model.Configurations(data)
+        config = model.Configurations.from_data(data)
 
         self.assertIsInstance(config, model.Configurations)
+
+        # ---
+        # test attributes
+        attributes = [
+            'cve_data_version', 'nodes'
+        ]
+
+        expected_return_types = [
+            str,
+            list
+        ]
+
+        for attr, type_ in zip(attributes, expected_return_types):
+            self.assertIsInstance(getattr(config, attr), type_)
 
 
 class TestImpact(unittest.TestCase):
@@ -173,6 +187,19 @@ class TestImpact(unittest.TestCase):
             data = json.loads(f.read())
             data = data['impact']
 
-        impact = model.Impact(data)
+        impact = model.Impact.from_data(data)
 
         self.assertIsInstance(impact, model.Impact)
+
+        # ---
+        # test attributes
+        attributes = [
+            'severity', 'exploitability_score', 'impact_score', 'cvss'
+        ]
+
+        expected_return_types = [
+            str, float, float, model.Impact.CVSSNode
+        ]
+
+        for attr, type_ in zip(attributes, expected_return_types):
+            self.assertIsInstance(getattr(impact, attr), type_)

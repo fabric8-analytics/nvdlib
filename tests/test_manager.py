@@ -355,7 +355,7 @@ class TestJSONFeedManager(unittest.TestCase):
 
             self.assertTrue(feeds)
             self.assertTrue(os.listdir(_TEMP_DATA_DIR))
-            self.assertTrue(all(feed.is_loaded() for feed in feeds))
+            self.assertTrue(all(feed.is_loaded() for feed in feeds.values()))
 
     def test_load_feeds(self):
         """Test JSONFeedManager `load_feeds` method."""
@@ -374,7 +374,7 @@ class TestJSONFeedManager(unittest.TestCase):
 
             self.assertTrue(feeds)
             self.assertTrue(os.listdir(_TEMP_DATA_DIR))
-            self.assertTrue(all(feed.is_loaded() for feed in feeds))
+            self.assertTrue(all(feed.is_loaded() for feed in feeds.values()))
 
             # ---
             # existing
@@ -383,7 +383,7 @@ class TestJSONFeedManager(unittest.TestCase):
             feeds = feed_manager.load_feeds(['sample'], data_dir='data/')
 
             self.assertTrue(feeds)
-            self.assertTrue(all(feed.is_loaded() for feed in feeds))
+            self.assertTrue(all(feed.is_loaded() for feed in feeds.values()))
 
     def test_feeds_check(self):
         """Test JSONFeedManager `feeds_check` method."""
