@@ -253,7 +253,7 @@ class TestJSONFeed(unittest.TestCase):
     def test_load(self):
         """Test JSONFeed `load` methods."""
         # test load existing
-        feed_name = 'modified'
+        feed_name = 'sample'
         json_feed = JSONFeed(feed_name, data_dir='data/')
 
         _EVENT_LOOP.run_until_complete(
@@ -266,8 +266,10 @@ class TestJSONFeed(unittest.TestCase):
         # ---
         # test download-load
 
+        json_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
+
         feed_name = 'modified'
-        json_feed = JSONFeed(feed_name, data_dir='data/')
+        json_feed = JSONFeed(feed_name, data_dir=json_dir)
 
         _EVENT_LOOP.run_until_complete(
             json_feed.download(load=True)
