@@ -1,4 +1,4 @@
-"""NVD JSON Feed management module."""
+"""NVD Feed management module."""
 
 import asyncio
 import aiofiles

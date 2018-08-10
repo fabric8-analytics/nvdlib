@@ -2,11 +2,72 @@
 
 Model:
 
-    # TODO
+    nvdlib.model.Document(
+        cve: nvdlib.model.CVE(
+             id_: str,
+             assigner: str,
+             data_version: str,
+             affects: AffectsEntry(data: List[
+                ProductNode(
+                    vendor_name: str,
+                    product_name: str,
+                    versions: List[str])]
+                )],
+             references: ReferenceEntry(data: List[
+                ReferenceNode(
+                    url: str,
+                    refsource: str
+                )],
+             descriptions: DescriptionEntry(data: List[
+                DescriptionNode(
+                    lang: str
+                )]
+        ),
+        configurations: nvdlib.model.Configurations(
+            cve_data_version: str,
+            nodes: List[
+                ConfigurationsEntry(
+                    data: List[
+                        ConfigurationsNode(
+                            vulnerable: True,
+                            cpe: str
+                        )],
+                    operator: str
+            )]
+        ),
+        impact: nvdlib.model.Impact(
+            severity: str,
+            exploitability_score: float,
+            impact_score: float,
+            cvss: nvdlib.model.Impact.CVSSNode(
+                version: str,
+                access_vector: str,
+                access_complexity: str,
+                authentication: str,
+                confidentiality_impact: str,
+                integrity_impact: str,
+                availability_impact: str,
+                base_score: float
+            )
+        ),
+        published_date: datetime.datetime(
+            year: int,
+            month: int,
+            day: int,
+            hour: int,
+            minute: int
+        ),
+        modified_date: datetime.datetime(
+            year: int,
+            month: int,
+            day: int,
+            hour: int,
+            minute: int
+        )
+    )
 
 """
 import datetime
-import operator
 import typing
 
 from abc import ABC, abstractmethod
@@ -346,9 +407,13 @@ class ConfigurationsEntry(Entry):
             )
 
     def __init__(self, data: dict):
-        self._operator = getattr(operator, f"{data['operator'].lower()}_", None)
+        self._operator: str = data['operator']
 
         super(ConfigurationsEntry, self).__init__(*data['cpe'])
+
+    @property
+    def operator(self) -> str:
+        return self.operator
 
     def parse(self, entry: typing.Any):
         return self.ConfigurationsNode(entry['vulnerable'], entry['cpe23Uri'])
