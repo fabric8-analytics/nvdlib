@@ -1,5 +1,6 @@
 """Module containing utilities for nvdlib package."""
 
+import hashlib
 import operator
 import typing
 
@@ -69,3 +70,14 @@ def get_victims_notation(version_tuple: typing.Sequence):
     notation = [str(SYMBOLS[i]) + str(version_tuple[i]) for i in indices]
 
     return ",".join(notation)
+
+
+def compute_sha256(fpath):
+    sha256 = hashlib.sha256()
+    with open(fpath, 'rb') as f:
+        while True:
+            data = f.read(4096)
+            if not data:
+                break
+            sha256.update(data)
+    return sha256.hexdigest().lower()
