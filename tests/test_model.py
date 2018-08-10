@@ -137,8 +137,8 @@ class TestEntries(unittest.TestCase):
 
         for product in [affects_next, affects_get]:
             self.assertTrue(product)
-            self.assertIsInstance(product.name, str)
-            self.assertIsInstance(product.vendor, str)
+            self.assertIsInstance(product.product_name, str)
+            self.assertIsInstance(product.vendor_name, str)
             self.assertIsInstance(product.versions, list)
 
         expected_iterations = 5
