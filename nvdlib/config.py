@@ -6,3 +6,6 @@ DEFAULT_DATA_DIR = os.path.join(XDG_DATA_HOME, 'nvd/')
 
 # logging
 DEFAULT_LOGGING_LEVEL = os.environ.get('DEFAULT_LOGGING_LEVEL', 'WARNING')
+
+# adapter
+ADAPTER = os.environ.get('ADAPTER', 'DEFAULT')

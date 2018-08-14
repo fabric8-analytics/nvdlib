@@ -1,4 +1,4 @@
-from . import config
+from nvdlib import config
 
 import logging
 

@@ -67,202 +67,18 @@ Model:
     )
 
 """
+
+import os
 import datetime
+import shutil
+import tempfile
 import typing
 
 from abc import ABC, abstractmethod
 from collections import namedtuple
 
-
-class Document(namedtuple('Document', [
-    'cve', 'configurations', 'impact', 'published_date', 'modified_date'
-])):
-    """Representation of NVD Feed entry encapsulating other objects."""
-
-    # noinspection PyInitNewSignature
-    def __new__(cls,
-                cve: "CVE" = None,
-                configurations: "Configurations" = None,
-                impact: "Impact" = None,
-                published_date: datetime.datetime = None,
-                modified_date: datetime.datetime = None):
-
-        return super(Document, cls).__new__(
-            cls,
-            cve=cve,
-            configurations=configurations,
-            impact=impact,
-            published_date=published_date,
-            modified_date=modified_date
-        )
-
-    @classmethod
-    def from_data(cls, data: dict):
-        cve = CVE.from_data(data=data['cve'])
-        configurations = Configurations.from_data(data=data['configurations'])
-        impact = Impact.from_data(data=data['impact'])
-
-        time_format = "%Y-%m-%dT%H:%MZ"
-        published_date = datetime.datetime.strptime(
-            data['publishedDate'],
-            time_format
-        )
-        modified_date = datetime.datetime.strptime(
-            data['lastModifiedDate'],
-            time_format
-        )
-
-        return cls(
-            cve=cve,
-            configurations=configurations,
-            impact=impact,
-            published_date=published_date,
-            modified_date=modified_date
-        )
-
-
-class CVE(namedtuple('CVE', [
-    'id_', 'assigner', 'data_version',
-    'affects', 'references', 'descriptions'
-])):
-    """Representation of NVD CVE object."""
-
-    def __new__(cls,
-                id_: str = None,
-                assigner: str = None,
-                data_version: str = None,
-                affects: 'AffectsEntry' = None,
-                references: 'ReferenceEntry' = None,
-                descriptions: 'DescriptionEntry' = None):
-
-        return super(CVE, cls).__new__(
-            cls,
-            id_=id_,
-            assigner=assigner,
-            data_version=data_version,
-            affects=affects,
-            references=references,
-            descriptions=descriptions)
-
-    @classmethod
-    def from_data(cls, data):
-        meta = data['CVE_data_meta']
-        id_ = meta['ID']
-        assigner = meta['ASSIGNER']
-
-        data_version = data['data_version']
-
-        affects = AffectsEntry(data['affects'])
-        references = ReferenceEntry(data['references'])
-        descriptions = DescriptionEntry(data['description'])
-
-        return cls(
-            id_=id_,
-            assigner=assigner,
-            data_version=data_version,
-            affects=affects,
-            references=references,
-            descriptions=descriptions)
-
-
-class Configurations(namedtuple('Configurations', [
-    'cve_data_version', 'nodes'
-])):
-    """Representation of NVD Configurations object."""
-
-    # noinspection PyInitNewSignature
-    def __new__(cls,
-                cve_data_version: str = None,
-                nodes: typing.List['ConfigurationsEntry'] = None):
-
-        return super(Configurations, cls).__new__(
-            cls,
-            cve_data_version=cve_data_version,
-            nodes=nodes,
-        )
-
-    @classmethod
-    def from_data(cls, data):
-        return cls(
-            cve_data_version=data['CVE_data_version'],
-            nodes=[
-                ConfigurationsEntry(node) for node in data['nodes']
-            ]
-        )
-
-
-class Impact(namedtuple('Impact', [
-    'severity', 'exploitability_score', 'impact_score', 'cvss'
-])):
-    """Representation of NVD Configurations object."""
-
-    class CVSSNode(namedtuple('CVSSNode', [
-        'version', 'access_vector', 'access_complexity', 'authentication',
-        'confidentiality_impact', 'integrity_impact', 'availability_impact',
-        'base_score'
-    ])):
-
-        def __new__(cls,
-                    version: str = None,
-                    access_vector: str = None,
-                    access_complexity: str = None,
-                    confidentiality_impact: str = None,
-                    authentication: str = None,
-                    integrity_impact: str = None,
-                    availability_impact: str = None,
-                    base_score: float = None):
-            return super().__new__(
-                cls,
-                version=version,
-                access_vector=access_vector,
-                access_complexity=access_complexity,
-                confidentiality_impact=confidentiality_impact,
-                authentication=authentication,
-                integrity_impact=integrity_impact,
-                availability_impact=availability_impact,
-                base_score=base_score,
-            )
-
-    # noinspection PyInitNewSignature
-    def __new__(cls,
-                severity: str = None,
-                exploitability_score: float = None,
-                impact_score: float = None,
-                cvss: CVSSNode = None):
-        return super(Impact, cls).__new__(
-            cls,
-            severity=severity,
-            exploitability_score=exploitability_score,
-            impact_score=impact_score,
-            cvss=cvss
-        )
-
-    @classmethod
-    def from_data(cls, data: dict):
-        impact_data = data['baseMetricV2']
-
-        severity = impact_data['severity']
-        exploitability_score = impact_data['exploitabilityScore']
-        impact_score = impact_data['impactScore']
-
-        cvss: dict = impact_data['cvssV2']
-        cvss_modified = dict(
-            version=cvss['version'],
-            access_vector=cvss['accessVector'],
-            access_complexity=cvss['accessComplexity'],
-            confidentiality_impact=cvss['confidentialityImpact'],
-            authentication=cvss['authentication'],
-            integrity_impact=cvss['integrityImpact'],
-            availability_impact=cvss['availabilityImpact'],
-            base_score=cvss['baseScore'],
-        )
-
-        return cls(
-            severity=severity,
-            exploitability_score=exploitability_score,
-            impact_score=impact_score,
-            cvss=cls.CVSSNode(**cvss_modified)
-        )
+from nvdlib import adapters, config
+from nvdlib.selector import Selector
 
 
 class Entry(ABC):
@@ -417,3 +233,277 @@ class ConfigurationsEntry(Entry):
 
     def parse(self, entry: typing.Any):
         return self.ConfigurationsNode(entry['vulnerable'], entry['cpe23Uri'])
+
+
+class Configurations(namedtuple('Configurations', [
+    'cve_data_version', 'nodes'
+])):
+    """Representation of NVD Configurations object."""
+
+    # noinspection PyInitNewSignature
+    def __new__(cls,
+                cve_data_version: str = None,
+                nodes: typing.List[ConfigurationsEntry] = None):
+
+        return super(Configurations, cls).__new__(
+            cls,
+            cve_data_version=cve_data_version,
+            nodes=nodes,
+        )
+
+    @classmethod
+    def from_data(cls, data):
+        if not data:
+            return cls(**{})
+
+        return cls(
+            cve_data_version=data['CVE_data_version'],
+            nodes=[
+                ConfigurationsEntry(node) for node in data['nodes']
+            ]
+        )
+
+
+class Impact(namedtuple('Impact', [
+    'severity', 'exploitability_score', 'impact_score', 'cvss'
+])):
+    """Representation of NVD Configurations object."""
+
+    class CVSSNode(namedtuple('CVSSNode', [
+        'version', 'access_vector', 'access_complexity', 'authentication',
+        'confidentiality_impact', 'integrity_impact', 'availability_impact',
+        'base_score'
+    ])):
+
+        def __new__(cls,
+                    version: str = None,
+                    access_vector: str = None,
+                    access_complexity: str = None,
+                    confidentiality_impact: str = None,
+                    authentication: str = None,
+                    integrity_impact: str = None,
+                    availability_impact: str = None,
+                    base_score: float = None):
+            return super().__new__(
+                cls,
+                version=version,
+                access_vector=access_vector,
+                access_complexity=access_complexity,
+                confidentiality_impact=confidentiality_impact,
+                authentication=authentication,
+                integrity_impact=integrity_impact,
+                availability_impact=availability_impact,
+                base_score=base_score,
+            )
+
+    # noinspection PyInitNewSignature
+    def __new__(cls,
+                severity: str = None,
+                exploitability_score: float = None,
+                impact_score: float = None,
+                cvss: CVSSNode = None):
+        return super(Impact, cls).__new__(
+            cls,
+            severity=severity,
+            exploitability_score=exploitability_score,
+            impact_score=impact_score,
+            cvss=cvss
+        )
+
+    @classmethod
+    def from_data(cls, data: dict):
+        if not data:
+            return cls(**{})
+
+        impact_data = data['baseMetricV2']
+
+        severity = impact_data['severity']
+        exploitability_score = impact_data['exploitabilityScore']
+        impact_score = impact_data['impactScore']
+
+        cvss: dict = impact_data['cvssV2']
+        cvss_modified = dict(
+            version=cvss['version'],
+            access_vector=cvss['accessVector'],
+            access_complexity=cvss['accessComplexity'],
+            confidentiality_impact=cvss['confidentialityImpact'],
+            authentication=cvss['authentication'],
+            integrity_impact=cvss['integrityImpact'],
+            availability_impact=cvss['availabilityImpact'],
+            base_score=cvss['baseScore'],
+        )
+
+        return cls(
+            severity=severity,
+            exploitability_score=exploitability_score,
+            impact_score=impact_score,
+            cvss=cls.CVSSNode(**cvss_modified)
+        )
+
+
+class CVE(namedtuple('CVE', [
+    'id_', 'assigner', 'data_version',
+    'affects', 'references', 'descriptions'
+])):
+    """Representation of NVD CVE object."""
+
+    def __new__(cls,
+                id_: str = None,
+                assigner: str = None,
+                data_version: str = None,
+                affects: AffectsEntry = None,
+                references: ReferenceEntry = None,
+                descriptions: DescriptionEntry = None):
+
+        return super(CVE, cls).__new__(
+            cls,
+            id_=id_,
+            assigner=assigner,
+            data_version=data_version,
+            affects=affects,
+            references=references,
+            descriptions=descriptions)
+
+    @classmethod
+    def from_data(cls, data):
+        meta = data['CVE_data_meta']
+        id_ = meta['ID']
+        assigner = meta['ASSIGNER']
+
+        data_version = data['data_version']
+
+        affects = AffectsEntry(data['affects'])
+        references = ReferenceEntry(data['references'])
+        descriptions = DescriptionEntry(data['description'])
+
+        return cls(
+            id_=id_,
+            assigner=assigner,
+            data_version=data_version,
+            affects=affects,
+            references=references,
+            descriptions=descriptions)
+
+
+class Document(namedtuple('Document', [
+    'cve', 'configurations', 'impact', 'published_date', 'modified_date'
+])):
+    """Representation of NVD Feed entry encapsulating other objects."""
+
+    # noinspection PyInitNewSignature
+    def __new__(cls,
+                cve: CVE = None,
+                configurations: Configurations = None,
+                impact: Impact = None,
+                published_date: datetime.datetime = None,
+                modified_date: datetime.datetime = None):
+
+        return super(Document, cls).__new__(
+            cls,
+            cve=cve,
+            configurations=configurations,
+            impact=impact,
+            published_date=published_date,
+            modified_date=modified_date
+        )
+
+    @classmethod
+    def from_data(cls, data: dict):
+        if not data:
+            return cls(**{})
+
+        cve = CVE.from_data(data=data['cve'])
+        configurations = Configurations.from_data(data=data['configurations'])
+        impact = Impact.from_data(data=data['impact'])
+
+        time_format = "%Y-%m-%dT%H:%MZ"
+        published_date = datetime.datetime.strptime(
+            data['publishedDate'],
+            time_format
+        )
+        modified_date = datetime.datetime.strptime(
+            data['lastModifiedDate'],
+            time_format
+        )
+
+        return cls(
+            cve=cve,
+            configurations=configurations,
+            impact=impact,
+            published_date=published_date,
+            modified_date=modified_date
+        )
+
+
+class Collection(object):
+    """Collection of Documents."""
+
+    def __init__(self,
+                 data_iterator: typing.Iterable[Document],
+                 storage: str = None,
+                 adapter: str = 'DEFAULT'
+                 ):
+        self._count: int = 0
+        self._clear_storage = True
+
+        if storage:
+            self._clear_storage = False
+            self._storage = storage
+
+        else:
+            self._storage = storage or os.path.join(
+                tempfile.gettempdir(),
+                f"nvdlib/.dump/{id(self)}"
+            )
+
+        # create directory
+        os.makedirs(self._storage)
+
+        # initialize adapter
+        self._adapter: adapters.BaseAdapter = getattr(
+            adapters,  # load adapter directly from module
+            adapter.upper()
+        )()
+
+        self._adapter.connect(storage=self._storage)
+        self._adapter.process(data_iterator)
+
+        self._data = self._adapter.sample()
+        self._count = self._adapter.count()
+
+    def __del__(self):
+        if self._clear_storage:
+            shutil.rmtree(self._storage)
+
+    def __len__(self):
+        return self._count
+
+    def __iter__(self):
+        # initialize adapter iterator
+        self._adapter.__iter__()
+
+        return self
+
+    def __next__(self):
+        return self._adapter.next()
+
+    @property
+    def storage(self):
+        return self._storage
+
+    def select(self, *selectors: Selector, operator='AND'):
+        self._adapter.select(*selectors, operator=operator)
+
+        return self
+
+    def project(self, *selectors: Selector):
+        raise NotImplementedError
+
+    def filter(self, fn: callable):
+        raise NotImplementedError
+
+    def next(self):
+        return self._adapter.next()
+
+    def next_batch(self, batch_size: int = 20):
+        return self._adapter.next_batch(batch_size)

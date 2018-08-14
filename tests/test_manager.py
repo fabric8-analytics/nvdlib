@@ -1,3 +1,5 @@
+"""Tests for nvdlib manager module."""
+
 import asyncio
 import datetime
 import os
@@ -5,11 +7,12 @@ import psutil
 import tempfile
 import unittest
 
+from nvdlib.model import Collection
 from nvdlib.manager import FeedManager, JSONFeed, JSONFeedMetadata
 
 
 _EVENT_LOOP = asyncio.get_event_loop()
-_TEMP_DATA_DIR = tempfile.mkdtemp(prefix='tests_', suffix='_nvd')
+_TEMP_DATA_DIR = tempfile.mkdtemp(prefix='tests_', suffix='_manager')
 
 
 class TestJSONFeedMetadata(unittest.TestCase):
@@ -199,11 +202,11 @@ class TestJSONFeedMetadata(unittest.TestCase):
         self.assertTrue(all([r is False for r in results]))
 
 
-class TestJSONFeed(unittest.TestCase):
-    """Tests for JSONFeed class."""
+class TestFeed(unittest.TestCase):
+    """Tests for Feed class."""
 
     def test___init__(self):
-        """Test JSONFeed initialization."""
+        """Test Feed initialization."""
         feed_name = 'sample'
         json_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
@@ -224,7 +227,7 @@ class TestJSONFeed(unittest.TestCase):
         self.assertTrue(json_feed)
 
     def test_download(self):
-        """Test JSONFeed `download` method."""
+        """Test Feed `download` method."""
         feed_name = 'modified'
         json_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
@@ -251,7 +254,7 @@ class TestJSONFeed(unittest.TestCase):
         self.assertIsInstance(json_feed.data, dict)
 
     def test_load(self):
-        """Test JSONFeed `load` methods."""
+        """Test Feed `load` methods."""
         # test load existing
         feed_name = 'sample'
         json_feed = JSONFeed(feed_name, data_dir='data/')
@@ -279,7 +282,7 @@ class TestJSONFeed(unittest.TestCase):
         self.assertIsInstance(json_feed.data, dict)
 
     def test_flush(self):
-        """Test JSONFeed `flush` method."""
+        """Test Feed `flush` method."""
         feed_name = 'sample'
         json_feed = JSONFeed(feed_name, data_dir='data/')
 
@@ -301,11 +304,11 @@ class TestJSONFeed(unittest.TestCase):
         self.assertLessEqual(process.memory_info().rss, memory_usage)
 
 
-class TestJSONFeedManager(unittest.TestCase):
-    """Tests for JSONFeedManager class."""
+class TestFeedManager(unittest.TestCase):
+    """Tests for FeedManager class."""
 
     def test___init__(self):
-        """Test JSONFeedManager initialization."""
+        """Test FeedManager initialization."""
         # ---
         # default
         feed_manager = FeedManager()
@@ -337,7 +340,7 @@ class TestJSONFeedManager(unittest.TestCase):
         self.assertTrue(feed_manager.event_loop.is_closed())
 
     def test_download_feeds(self):
-        """Test JSONFeedManager `download_feeds` method."""
+        """Test FeedManager `download_feeds` method."""
         feed_names = ['recent', 'modified']
         data_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
@@ -356,9 +359,10 @@ class TestJSONFeedManager(unittest.TestCase):
             self.assertTrue(feeds)
             self.assertTrue(os.listdir(_TEMP_DATA_DIR))
             self.assertTrue(all(feed.is_loaded() for feed in feeds.values()))
+            self.assertEqual(feeds, feed_manager.feeds)
 
     def test_load_feeds(self):
-        """Test JSONFeedManager `load_feeds` method."""
+        """Test FeedManager `load_feeds` method."""
         # non-existing feeds, download-load
         feed_names = ['recent', 'modified']
         data_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
@@ -385,8 +389,32 @@ class TestJSONFeedManager(unittest.TestCase):
             self.assertTrue(feeds)
             self.assertTrue(all(feed.is_loaded() for feed in feeds.values()))
 
+    def test_collect(self):
+        """Test FeedManager `collect` method."""
+        feed_names = ['sample']
+
+        with FeedManager(data_dir='data/') as feed_manager:
+            # load feeds
+            feed_dict = feed_manager.load_feeds(feed_names)
+            feed_names = list(feed_dict.keys())
+            feeds = list(feed_dict.values())
+
+            self.assertEqual(feed_names, ['sample'])
+            self.assertIsInstance(feeds[0], JSONFeed)
+
+            # ---
+            # query List[str]
+            collection = feed_manager.collect(feed_names)
+
+            self.assertIsInstance(collection, Collection)
+
+            # query List[JSONFeed]
+            collection = feed_manager.collect(feeds)
+
+            self.assertIsInstance(collection, Collection)
+
     def test_feeds_check(self):
-        """Test JSONFeedManager `feeds_check` method."""
+        """Test FeedManager `feeds_check` method."""
         # existing feeds, remote
         feeds = ['recent', 2018]
 
@@ -406,7 +434,7 @@ class TestJSONFeedManager(unittest.TestCase):
             _ = FeedManager.feeds_check(*feeds)
 
     def test_feeds_exist(self):
-        """Test JSONFeedManager `feeds_exist` method."""
+        """Test FeedManager `feeds_exist` method."""
         # existing
         feeds = ['sample']
         self.assertTrue(FeedManager.feeds_exist(*feeds, data_dir='data/'))
