@@ -1,3 +1,5 @@
+"""Tests for nvdlib model."""
+
 import datetime
 import json
 import unittest
@@ -7,62 +9,8 @@ from nvdlib import model
 
 SAMPLE_CVE_PATH = 'data/cve-1.0-sample.json'
 
-
-class TestDocument(unittest.TestCase):
-    """Test Document model."""
-
-    def test___init__(self):
-        """Test Entry `__init__` method."""
-        with open(SAMPLE_CVE_PATH) as f:
-            data = json.loads(f.read())
-        doc = model.Document.from_data(data)
-
-        self.assertIsInstance(doc, model.Document)
-
-        # ---
-        # test attributes
-        attributes = [
-            'cve', 'configurations', 'impact',
-            'published_date', 'modified_date'
-        ]
-
-        expected_return_types = [
-            model.CVE, model.Configurations, model.Impact,
-            datetime.datetime, datetime.datetime
-        ]
-
-        for attr, type_ in zip(attributes, expected_return_types):
-            self.assertIsInstance(getattr(doc, attr), type_)
-
-
-class TestCVE(unittest.TestCase):
-    """Test CVE model."""
-
-    def test___init__(self):
-        """Test CVE `__init__` method."""
-
-        with open(SAMPLE_CVE_PATH) as f:
-            data = json.loads(f.read())
-            data = data['cve']
-
-        cve = model.CVE.from_data(data)
-
-        self.assertIsInstance(cve, model.CVE)
-
-        # ---
-        # test attributes
-        attributes = [
-            'id_', 'assigner', 'data_version',
-            'affects', 'references', 'descriptions'
-        ]
-
-        expected_return_types = [
-            str, str, str,
-            model.AffectsEntry, model.ReferenceEntry, model.DescriptionEntry
-        ]
-
-        for attr, type_ in zip(attributes, expected_return_types):
-            self.assertIsInstance(getattr(cve, attr), type_)
+with open(SAMPLE_CVE_PATH) as f:
+    DATA = json.loads(f.read())
 
 
 class TestEntries(unittest.TestCase):
@@ -70,12 +18,7 @@ class TestEntries(unittest.TestCase):
 
     def test_description_node(self):
         """Test DescriptionEntry class."""
-
-        with open(SAMPLE_CVE_PATH) as f:
-            data = json.loads(f.read())
-            data = data['cve']['description']
-
-        desc_entry = model.DescriptionEntry(data)
+        desc_entry = model.DescriptionEntry(DATA)
 
         self.assertIsInstance(desc_entry, model.DescriptionEntry)
 
@@ -95,12 +38,7 @@ class TestEntries(unittest.TestCase):
 
     def test_reference_entry(self):
         """Test ReferenceEntry class."""
-
-        with open(SAMPLE_CVE_PATH) as f:
-            data = json.loads(f.read())
-            data = data['cve']['references']
-
-        ref_entry = model.ReferenceEntry(data)
+        ref_entry = model.ReferenceEntry(DATA['cve']['references'])
 
         self.assertIsInstance(ref_entry, model.ReferenceEntry)
 
@@ -122,12 +60,7 @@ class TestEntries(unittest.TestCase):
 
     def test_affects_entry(self):
         """Test AffectsEntry class."""
-
-        with open(SAMPLE_CVE_PATH) as f:
-            data = json.loads(f.read())
-            data = data['cve']['affects']
-
-        affects_entry = model.AffectsEntry(data)
+        affects_entry = model.AffectsEntry(DATA['cve']['affects'])
 
         self.assertIsInstance(affects_entry, model.AffectsEntry)
 
@@ -153,12 +86,7 @@ class TestConfigurations(unittest.TestCase):
 
     def test___init__(self):
         """Test Configurations `__init__` method."""
-
-        with open(SAMPLE_CVE_PATH) as f:
-            data = json.loads(f.read())
-            data = data['configurations']
-
-        config = model.Configurations.from_data(data)
+        config = model.Configurations.from_data(DATA['configurations'])
 
         self.assertIsInstance(config, model.Configurations)
 
@@ -176,18 +104,19 @@ class TestConfigurations(unittest.TestCase):
         for attr, type_ in zip(attributes, expected_return_types):
             self.assertIsInstance(getattr(config, attr), type_)
 
+        # ---
+        # test empty data
+        config = model.Configurations.from_data(dict())
+
+        self.assertIsInstance(config, model.Configurations)
+
 
 class TestImpact(unittest.TestCase):
     """Test CVE model."""
 
     def test___init__(self):
         """Test Impact `__init__` method."""
-
-        with open(SAMPLE_CVE_PATH) as f:
-            data = json.loads(f.read())
-            data = data['impact']
-
-        impact = model.Impact.from_data(data)
+        impact = model.Impact.from_data(DATA['impact'])
 
         self.assertIsInstance(impact, model.Impact)
 
@@ -203,3 +132,81 @@ class TestImpact(unittest.TestCase):
 
         for attr, type_ in zip(attributes, expected_return_types):
             self.assertIsInstance(getattr(impact, attr), type_)
+
+        # ---
+        # test empty data
+        impact = model.Impact.from_data(dict())
+
+        self.assertIsInstance(impact, model.Impact)
+
+
+class TestCVE(unittest.TestCase):
+    """Test CVE model."""
+
+    def test___init__(self):
+        """Test CVE `__init__` method."""
+        cve = model.CVE.from_data(DATA)
+
+        self.assertIsInstance(cve, model.CVE)
+
+        # ---
+        # test attributes
+        attributes = [
+            'id_', 'assigner', 'data_version',
+            'affects', 'references', 'descriptions'
+        ]
+
+        expected_return_types = [
+            str, str, str,
+            model.AffectsEntry, model.ReferenceEntry, model.DescriptionEntry
+        ]
+
+        for attr, type_ in zip(attributes, expected_return_types):
+            self.assertIsInstance(getattr(cve, attr), type_)
+
+
+class TestDocument(unittest.TestCase):
+    """Test Document model."""
+
+    def test___init__(self):
+        """Test Entry `__init__` method."""
+        doc = model.Document.from_data(DATA)
+
+        self.assertIsInstance(doc, model.Document)
+
+        # ---
+        # test attributes
+        attributes = [
+            'cve', 'configurations', 'impact',
+            'published_date', 'modified_date'
+        ]
+
+        expected_return_types = [
+            model.CVE, model.Configurations, model.Impact,
+            datetime.datetime, datetime.datetime
+        ]
+
+        for attr, type_ in zip(attributes, expected_return_types):
+            self.assertIsInstance(getattr(doc, attr), type_)
+
+
+class TestCollection(unittest.TestCase):
+    """Test Collection model."""
+
+    def test___init__(self):
+        document = model.Document.from_data(DATA)
+        collection = model.Collection([document])
+
+        self.assertIsInstance(collection, model.Collection)
+
+        # collection should contain 1 document
+        self.assertEqual(len(collection), 1)
+
+    def test_select(self):
+        pass
+
+    def test_project(self):
+        pass
+
+    def test_filter(self):
+        pass
