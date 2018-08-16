@@ -208,7 +208,7 @@ class AffectsEntry(Entry):
 
 class ConfigurationsEntry(Entry):
 
-    class ConfigurationsNode(namedtuple('ConfigurationsNode', ['vulnerable', 'cpe'])):
+    class ConfigurationsNode(namedtuple('ConfigurationsNode', ['vulnerable', 'cpe'])):  # TODO: Consider including version data
 
         # noinspection PyInitNewSignature
         def __new__(cls, vulnerable: bool = None, cpe: str = None, **kwargs):
@@ -221,7 +221,7 @@ class ConfigurationsEntry(Entry):
     def __init__(self, data: dict):
         self._operator: str = data['operator']
 
-        super(ConfigurationsEntry, self).__init__(*getattr(data, 'cpe', []))
+        super(ConfigurationsEntry, self).__init__(*data.get('cpe', []))
 
     @property
     def operator(self) -> str:
@@ -413,10 +413,6 @@ class Document(namedtuple('Document', [
         if not data:
             return cls(**{})
 
-        cve = CVE.from_data(data=data['cve'])
-        configurations = Configurations.from_data(data=data['configurations'])
-        impact = Impact.from_data(data=data['impact'])
-
         time_format = "%Y-%m-%dT%H:%MZ"
         published_date = datetime.datetime.strptime(
             data['publishedDate'],
@@ -426,6 +422,10 @@ class Document(namedtuple('Document', [
             data['lastModifiedDate'],
             time_format
         )
+
+        cve = CVE.from_data(data=data['cve'])
+        configurations = Configurations.from_data(data=data['configurations'])
+        impact = Impact.from_data(data=data['impact'])
 
         return cls(
             cve=cve,
