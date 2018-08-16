@@ -1,4 +1,4 @@
-"""Tests for nvdlib adapters."""
+"""Tests for adapters module."""
 
 import os
 
@@ -71,6 +71,18 @@ class TestDefaultAdapter(unittest.TestCase):
         with open(os.path.join(tmp_storage, '.meta'), 'r') as f:
             self.assertTrue(f.read())
 
+        # ---
+        # test dumping multiple batches
+
+        # create new storage for clear env
+        tmp_storage = tempfile.mkdtemp(prefix='tests_', suffix='_adapters')
+
+        adapter = DefaultAdapter(storage=tmp_storage, cache_size=2)  # cache every second file
+        adapter.connect()
+        adapter.process(data=[DOCUMENT] * 10)  # should create 5 batch files + 1 meta file
+
+        self.assertEqual(len(os.listdir(tmp_storage)), 6)
+
     def test_select(self):
         """Test DefaultAdapters `select` method."""
 
@@ -83,9 +95,6 @@ class TestDefaultAdapter(unittest.TestCase):
     def test_sample(self):
         """Test DefaultAdapters `sample` method."""
 
-    def test_dump(self):
-        """Test DefaultAdapters `dump` method."""
-
     def test_cursor(self):
         """Test DefaultAdapters `cursor` method."""
         tmp_storage = tempfile.mkdtemp(prefix='tests_', suffix='_adapters')
@@ -95,34 +104,43 @@ class TestDefaultAdapter(unittest.TestCase):
         adapter.connect()
         adapter.process(data=[DOCUMENT])
 
-        # default (single Document)
+        # ---
+        # default (single Document), in-memory
         cursor = adapter.cursor()
 
         self.assertIsInstance(cursor.next(), Document)
 
         # batch
         cursor = adapter.cursor()
-        cursor.batch_size(5)
 
-        batch = cursor.next()
-
-        print(batch)
+        batch = cursor.next_batch(batch_size=5)
 
         self.assertIsInstance(batch, list)
         # first entry should be the Document itself
         self.assertTrue(batch[0])
         # rest should be None (preserve consistency)
-        self.assertTrue(not any([entry for entry in batch[1:]]))
+        self.assertTrue(not any(batch[1:]))
         self.assertEqual(len(batch), 5)
 
-    def test_count(self) -> int:
-        """Test DefaultAdapters `count` method."""
+        # ---
+        # test cursor over persistent storage files
+        # create new storage for clear env
+        tmp_storage = tempfile.mkdtemp(prefix='tests_', suffix='_adapters')
 
-    def test_next(self):
-        """Test DefaultAdapters `next` method."""
+        adapter = DefaultAdapter(storage=tmp_storage, cache_size=2)  # cache every second file
+        adapter.connect()
+        adapter.process(data=[DOCUMENT] * 10)  # should create 5 cache files + 1 meta file
 
-    def test_next_batch(self, batch_size=500):
-        """Test DefaultAdapters `next_batch` method."""
+        self.assertEqual(len(os.listdir(tmp_storage)), 6)
+
+        # different initialization
+        cursor = adapter.cursor()
+        cursor.batch_size(5)
+
+        batch = cursor.next_batch()
+
+        self.assertTrue(all(batch))
+        self.assertEqual(len(batch), 5)
 
     def test__encode(self):
         """Test DefaultAdapters `_encode` method."""
