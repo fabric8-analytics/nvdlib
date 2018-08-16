@@ -590,6 +590,8 @@ class FeedManager(object):
 
             for feed in feed_data:
 
+                _LOGGER.debug(f"Collecting entries from feed '{feed}'")
+
                 # type check
                 if isinstance(feed, str) or isinstance(feed, int):
                     feed_dict = self.load_feeds([feed])
