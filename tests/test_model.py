@@ -1,4 +1,4 @@
-"""Tests for nvdlib model."""
+"""Tests for model module."""
 
 import datetime
 import json
@@ -18,7 +18,7 @@ class TestEntries(unittest.TestCase):
 
     def test_description_node(self):
         """Test DescriptionEntry class."""
-        desc_entry = model.DescriptionEntry(DATA)
+        desc_entry = model.DescriptionEntry(DATA['cve']['description'])
 
         self.assertIsInstance(desc_entry, model.DescriptionEntry)
 
@@ -145,7 +145,7 @@ class TestCVE(unittest.TestCase):
 
     def test___init__(self):
         """Test CVE `__init__` method."""
-        cve = model.CVE.from_data(DATA)
+        cve = model.CVE.from_data(DATA['cve'])
 
         self.assertIsInstance(cve, model.CVE)
 
@@ -188,25 +188,3 @@ class TestDocument(unittest.TestCase):
 
         for attr, type_ in zip(attributes, expected_return_types):
             self.assertIsInstance(getattr(doc, attr), type_)
-
-
-class TestCollection(unittest.TestCase):
-    """Test Collection model."""
-
-    def test___init__(self):
-        document = model.Document.from_data(DATA)
-        collection = model.Collection([document])
-
-        self.assertIsInstance(collection, model.Collection)
-
-        # collection should contain 1 document
-        self.assertEqual(len(collection), 1)
-
-    def test_select(self):
-        pass
-
-    def test_project(self):
-        pass
-
-    def test_filter(self):
-        pass

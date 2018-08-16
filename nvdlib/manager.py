@@ -23,6 +23,7 @@ import typing
 from typing import Union
 
 from nvdlib import config, model, utils
+from nvdlib.collector import Collector
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -69,6 +70,9 @@ class JSONFeedMetadata(object):
         return "[metadata:{feed}] sha256:{sha256} ({last_modified})".format(feed=self._name,
                                                                             sha256=self._sha256,
                                                                             last_modified=self._last_modified)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(feed_name={self._name}, data_dir={self._data_dir})"
 
     @property
     def data(self) -> typing.Union[str, dict, None]:
@@ -316,6 +320,12 @@ class JSONFeed(object):
 
         self._is_downloaded = os.path.isfile(self._data_path)
         self._is_loaded = False
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(feed_name={self._name}, data_dir={self._data_dir})"
+
+    def __str__(self):
+        return repr(self)
 
     @property
     def name(self):
@@ -610,7 +620,7 @@ class FeedManager(object):
         pool.close()
         pool.join()
 
-        return model.Collection(
+        return Collector(
             data_iterator=document_iterator,
         )
 

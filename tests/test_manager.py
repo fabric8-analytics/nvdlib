@@ -1,4 +1,4 @@
-"""Tests for nvdlib manager module."""
+"""Tests for manager module."""
 
 import asyncio
 import datetime
@@ -7,7 +7,7 @@ import psutil
 import tempfile
 import unittest
 
-from nvdlib.model import Collection
+from nvdlib.collector import Collector
 from nvdlib.manager import FeedManager, JSONFeed, JSONFeedMetadata
 
 
@@ -404,14 +404,14 @@ class TestFeedManager(unittest.TestCase):
 
             # ---
             # query List[str]
-            collection = feed_manager.collect(feed_names)
+            collector = feed_manager.collect(feed_names)
 
-            self.assertIsInstance(collection, Collection)
+            self.assertIsInstance(collector, Collector)
 
             # query List[JSONFeed]
-            collection = feed_manager.collect(feeds)
+            collector = feed_manager.collect(feeds)
 
-            self.assertIsInstance(collection, Collection)
+            self.assertIsInstance(collector, Collector)
 
     def test_feeds_check(self):
         """Test FeedManager `feeds_check` method."""

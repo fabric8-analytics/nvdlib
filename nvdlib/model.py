@@ -68,17 +68,12 @@ Model:
 
 """
 
-import os
 import datetime
-import shutil
-import tempfile
+
 import typing
 
 from abc import ABC, abstractmethod
 from collections import namedtuple
-
-from nvdlib import adapters, config
-from nvdlib.selector import Selector
 
 
 class Entry(ABC):
@@ -130,7 +125,7 @@ class DescriptionEntry(Entry):
     class DescriptionNode(namedtuple('DescriptionNode', ['lang', 'value'])):
 
         # noinspection PyInitNewSignature
-        def __new__(cls, lang: str = None, value: str = None):
+        def __new__(cls, lang: str = None, value: str = None, **kwargs):
             return super().__new__(
                 cls,
                 lang=lang,
@@ -151,7 +146,7 @@ class ReferenceEntry(Entry):
     class ReferenceNode(namedtuple('Reference', ['url', 'name', 'refsource'])):
 
         # noinspection PyInitNewSignature
-        def __new__(cls, url: str = None, name: str = None, refsource: str = None):
+        def __new__(cls, url: str = None, name: str = None, refsource: str = None, **kwargs):
             return super().__new__(
                 cls,
                 url=url,
@@ -176,7 +171,8 @@ class AffectsEntry(Entry):
         def __new__(cls,
                     vendor_name: str = None,
                     product_name: str = None,
-                    versions: list = None):
+                    versions: list = None,
+                    **kwargs):
             return super().__new__(
                 cls,
                 vendor_name=vendor_name,
@@ -215,7 +211,7 @@ class ConfigurationsEntry(Entry):
     class ConfigurationsNode(namedtuple('ConfigurationsNode', ['vulnerable', 'cpe'])):
 
         # noinspection PyInitNewSignature
-        def __new__(cls, vulnerable: bool = None, cpe: str = None):
+        def __new__(cls, vulnerable: bool = None, cpe: str = None, **kwargs):
             return super().__new__(
                 cls,
                 vulnerable=vulnerable,
@@ -225,7 +221,7 @@ class ConfigurationsEntry(Entry):
     def __init__(self, data: dict):
         self._operator: str = data['operator']
 
-        super(ConfigurationsEntry, self).__init__(*data['cpe'])
+        super(ConfigurationsEntry, self).__init__(*getattr(data, 'cpe', []))
 
     @property
     def operator(self) -> str:
@@ -243,7 +239,8 @@ class Configurations(namedtuple('Configurations', [
     # noinspection PyInitNewSignature
     def __new__(cls,
                 cve_data_version: str = None,
-                nodes: typing.List[ConfigurationsEntry] = None):
+                nodes: typing.List[ConfigurationsEntry] = None,
+                **kwargs):
 
         return super(Configurations, cls).__new__(
             cls,
@@ -283,7 +280,8 @@ class Impact(namedtuple('Impact', [
                     authentication: str = None,
                     integrity_impact: str = None,
                     availability_impact: str = None,
-                    base_score: float = None):
+                    base_score: float = None,
+                    **kwargs):
             return super().__new__(
                 cls,
                 version=version,
@@ -301,7 +299,8 @@ class Impact(namedtuple('Impact', [
                 severity: str = None,
                 exploitability_score: float = None,
                 impact_score: float = None,
-                cvss: CVSSNode = None):
+                cvss: CVSSNode = None,
+                **kwarsg):
         return super(Impact, cls).__new__(
             cls,
             severity=severity,
@@ -353,7 +352,8 @@ class CVE(namedtuple('CVE', [
                 data_version: str = None,
                 affects: AffectsEntry = None,
                 references: ReferenceEntry = None,
-                descriptions: DescriptionEntry = None):
+                descriptions: DescriptionEntry = None,
+                **kwargs):
 
         return super(CVE, cls).__new__(
             cls,
@@ -396,7 +396,8 @@ class Document(namedtuple('Document', [
                 configurations: Configurations = None,
                 impact: Impact = None,
                 published_date: datetime.datetime = None,
-                modified_date: datetime.datetime = None):
+                modified_date: datetime.datetime = None,
+                **kwargs):
 
         return super(Document, cls).__new__(
             cls,
@@ -433,77 +434,3 @@ class Document(namedtuple('Document', [
             published_date=published_date,
             modified_date=modified_date
         )
-
-
-class Collection(object):
-    """Collection of Documents."""
-
-    def __init__(self,
-                 data_iterator: typing.Iterable[Document],
-                 storage: str = None,
-                 adapter: str = 'DEFAULT'
-                 ):
-        self._count: int = 0
-        self._clear_storage = True
-
-        if storage:
-            self._clear_storage = False
-            self._storage = storage
-
-        else:
-            self._storage = storage or os.path.join(
-                tempfile.gettempdir(),
-                f"nvdlib/.dump/{id(self)}"
-            )
-
-        # create directory
-        os.makedirs(self._storage)
-
-        # initialize adapter
-        self._adapter: adapters.BaseAdapter = getattr(
-            adapters,  # load adapter directly from module
-            adapter.upper()
-        )()
-
-        self._adapter.connect(storage=self._storage)
-        self._adapter.process(data_iterator)
-
-        self._data = self._adapter.sample()
-        self._count = self._adapter.count()
-
-    def __del__(self):
-        if self._clear_storage:
-            shutil.rmtree(self._storage)
-
-    def __len__(self):
-        return self._count
-
-    def __iter__(self):
-        # initialize adapter iterator
-        self._adapter.__iter__()
-
-        return self
-
-    def __next__(self):
-        return self._adapter.next()
-
-    @property
-    def storage(self):
-        return self._storage
-
-    def select(self, *selectors: Selector, operator='AND'):
-        self._adapter.select(*selectors, operator=operator)
-
-        return self
-
-    def project(self, *selectors: Selector):
-        raise NotImplementedError
-
-    def filter(self, fn: callable):
-        raise NotImplementedError
-
-    def next(self):
-        return self._adapter.next()
-
-    def next_batch(self, batch_size: int = 20):
-        return self._adapter.next_batch(batch_size)

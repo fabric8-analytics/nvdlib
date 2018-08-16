@@ -3,6 +3,7 @@
 import atexit
 import fcntl
 import gc
+import io
 import os
 import re
 
@@ -15,11 +16,13 @@ import typing
 import pickle
 import ujson
 
-from nvdlib.adapters.base import BaseAdapter
+from nvdlib.adapters.base import BaseAdapter, BaseCursor
+from nvdlib.model import Document
 from nvdlib.selector import Selector
 
 
 __LOCKS = set()
+__DUMP_PATTERN = r"(?<hexmask>0[xX][0-9a-fA-F]+)(?<identifier>\d+)(?<timestamp>(\d+).(\d+))"
 
 
 def register_lock(*fd):
@@ -45,33 +48,49 @@ def release_lock(*fd):
 atexit.register(release_lock, *__LOCKS)
 
 
-class Document:
-    """Forward reference of nvdlib.model.Document class"""
-
-
 class DefaultAdapter(BaseAdapter):
+    """Default storage adapter."""
 
-    STORAGE_BATCH_SIZE = 5000
+    __CACHE_SIZE = 5000
+    __BITMASK_SIZE = 32
 
-    def __init__(self, storage: str = None):
+    def __init__(self, storage: str = None, cache_size: int = None):
         """Initialize DefaultAdapter instance."""
         # run this before any other initialization
         super(DefaultAdapter, self).__init__()
 
-        self._storage = storage
+        self._count = 0
 
-        self._data: typing.List[Document] = [None] * self.STORAGE_BATCH_SIZE
+        self._storage = storage
+        self._cache_size = cache_size or self.__CACHE_SIZE
+
+        self._data: typing.List[Document] = [None] * self._cache_size
         self._meta: typing.Dict[str, dict] = dict()
 
         self._meta_fpath = None
         self._meta_fd = None
         self._batches = set()  # set of batch file descriptors
 
-        self._bitmask_size = 32
-
     def __del__(self):
         """Finalize object destruction."""
         release_lock(*self._batches, self._meta_fd)
+
+    @property
+    def cache_size(self):
+        return self._cache_size
+
+    def set_cache_size(self, size: int):
+        """Resize storage cache size.
+
+        NOTE: This is an expansive operation as all recorded data has to be processed again
+        to match the new storage size.
+        It is recommended to provide desired cache size during initialization.
+        """
+        if size == self._cache_size:
+            return
+
+        raise NotImplementedError("This functionality has not been implemented yet. Please use recommended approach"
+                                  " and provide `cache_size` during initialization of `DefaultAdapter`.")
 
     def connect(self, storage: str = None):
         """Connect adapter adapter to a storage."""
@@ -110,9 +129,10 @@ class DefaultAdapter(BaseAdapter):
     def process(self, data: typing.Iterable["Document"]):
         """Process given data and store in connected storage."""
 
-        batch_size = 0
+        index = 0
+        count = 0
 
-        for index, document in enumerate(data):
+        for document in data:
             # noinspection PyUnresolvedReferences
             assert document.cve, f"Invalid document: {document}"
             # noinspection PyUnresolvedReferences
@@ -122,29 +142,35 @@ class DefaultAdapter(BaseAdapter):
             self._meta[document_id] = {'index': index}
             self._data[index] = document
 
-            batch_size += 1
+            count += 1
 
-            if batch_size % self.STORAGE_BATCH_SIZE == 0:
+            index = count % self._cache_size
+            if count and index == 0:
                 self.cache()
 
-        self._count = batch_size
+        self._count = count
 
         return self
 
+    def count(self) -> int:
+        """Return number of entries in the collection."""
+        return self._count
+
     def select(self, *selectors: Selector, operator: str = 'AND'):
         """Select documents based on given selector."""
+        raise NotImplementedError
 
     def project(self, *selectors: Selector):
         """Project specific attributes based on given selectors."""
+        raise NotImplementedError
 
     def filter(self, fn: callable):
         """Filter documents based on function call."""
-
-    def sample(self, size: int = 20):
-        """Draw random sample."""
+        raise NotImplementedError
 
     def dump(self, storage: typing.Any = None):
         """Dump stored data into a storage."""
+        raise NotImplementedError
 
     def cache(self):
         """Cache stored data."""
@@ -169,7 +195,7 @@ class DefaultAdapter(BaseAdapter):
             self._meta[key].update({'batch': dump_file})
 
         # dump batch
-        dump_fd = open(dump_path, 'wb')
+        dump_fd = open(dump_path, 'a+b')
 
         register_lock(dump_fd)
 
@@ -192,16 +218,23 @@ class DefaultAdapter(BaseAdapter):
 
     def cursor(self):
         """Initialize cursor to the beginning of a collection."""
-        return _Cursor(
-            data=self._data
-        )
+        if self._batches:
+            cursor = Cursor(
+                batches=self._batches
+            )
+        else:
+            cursor = Cursor(
+                data=self._data
+            )
+
+        return cursor
 
     def _encode(self, years: typing.Iterable) -> str:
         """Encode binary mask into hexadecimal format."""
         year_set = set(map(str, years))
 
         year_range = ['recent', 'modified'] + list(
-            range(2001 + self._bitmask_size, 2001, -1)
+            range(2001 + self.__BITMASK_SIZE, 2001, -1)
         )
 
         mask = [
@@ -218,10 +251,10 @@ class DefaultAdapter(BaseAdapter):
         if not re.match(hex_pattern, identifier):
             raise ValueError("Mask does not match hexadecimal pattern.")
 
-        mask = bin(int(identifier, base=16))[2:].zfill(self._bitmask_size)
+        mask = bin(int(identifier, base=16))[2:].zfill(self.__BITMASK_SIZE)
 
         year_range = ['recent', 'modified'] + list(
-            map(str, range(2001 + self._bitmask_size, 2001, -1))
+            map(str, range(2001 + self.__BITMASK_SIZE, 2001, -1))
         )
 
         # return set of years
@@ -234,37 +267,72 @@ class DefaultAdapter(BaseAdapter):
         gc.collect()
 
         self._count = 0
-        self._data: typing.List[Document] = [None] * self.STORAGE_BATCH_SIZE
+        self._data: typing.List[Document] = [None] * self._cache_size
 
 
-class _Cursor(object):
+class Cursor(BaseCursor):
+    """One-shot iterator over data storage."""
 
     def __init__(self,
-                 data: typing.Iterable,
-                 batch_size: int = 1):
-        """Initialize cursor over data."""
-        self._data_iterator = iter(data)
+                 data: typing.Iterable = None,
+                 batches: typing.Iterable[io.BytesIO] = None,
+                 batch_size: int = 20):
+        """Initialize iterator over data or batch files (only one needs to be specified)."""
+        if not any([data, batches]):
+            raise ValueError("Either in-memory data or persistent storage files must be provided.")
 
+        if all([data, batches]):
+            raise ValueError("Cursor can not iterate over both in-memory data and persistent storage.")
+
+        self._index = 0
+        self._data = data
+
+        self._batches = batches
         self._batch_size = batch_size
 
-    def next(self):
-        batch = None
+        # initialize iterator
+        self._data_iterator = self.get_iterator()
 
-        try:
-            if self._batch_size == 1:
-                # batch is a single item
-                batch = next(self._data_iterator)
+    @property
+    def index(self):
+        return self._index
 
-            # accumulate and yield in batches
-            else:
-                batch = [
-                    next(self._data_iterator) for _ in range(self._batch_size)
-                ]
+    def next(self) -> Document:
+        """Return next element."""
+        ret = next(self._data_iterator)
+        self._index += 1
 
-        except StopIteration:
-            pass
+        return ret
+
+    def next_batch(self, batch_size: int = None) -> typing.Sized:
+        """Return next batch of elements."""
+        # accumulate and yield in batches
+        if batch_size is None or batch_size <= 0:
+            batch_size = self._batch_size
+
+        batch = [None] * batch_size
+        for i in range(batch_size):
+            try:
+                batch[i] = next(self._data_iterator)
+                self._index += 1
+            except StopIteration:
+                batch[i:] = None
+                break
 
         return batch
 
     def batch_size(self, batch_size: int):
+        """Set batch size."""
         self._batch_size = batch_size
+
+    def get_iterator(self) -> typing.Iterator:
+        """Iterate over stored data."""
+
+        if self._data:
+            yield from iter(self._data)
+
+        else:
+            for batch_dump in self._batches:
+                batch_dump.seek(0)
+                data = pickle.load(batch_dump, encoding='utf-8')
+                yield from iter(data)

@@ -1,21 +1,34 @@
-"""Abstract Base Class for a NVD feed adapter."""
+"""Abstract Base Class for a NVD feed adapter -- converts storage operations to target interface."""
+import random
 import typing
 
 from abc import ABC, abstractmethod
 
+from nvdlib.model import Document
 from nvdlib.selector import Selector
 
 
-class Document:
-    """Forward reference of nvdlib.model.Document class"""
+class BaseCursor(ABC):
+    """Abstract base class for adapter cursor."""
+
+    @abstractmethod
+    def next(self) -> Document:
+        """Return next element."""
+
+    @abstractmethod
+    def next_batch(self, batch_size: int = None) -> typing.List[Document]:
+        """Return next batch of elements."""
+
+    @abstractmethod
+    def batch_size(self, batch_size: int):
+        """Set batch size."""
 
 
 class BaseAdapter(ABC):
+    """Abstract class defining storage adapter."""
 
     def __init__(self):
-        self._count: int = 0
         self._storage: typing.Any = None
-
         self._data: typing.Any = None
 
         self._cursor: typing.Any = None
@@ -27,7 +40,10 @@ class BaseAdapter(ABC):
         return self
 
     def __next__(self):
-        return self.next()
+        if not self._cursor:
+            raise Exception("Iterator has not been initialized. Cannot call `__next__` method.")
+
+        return self._cursor.next()
 
     @property
     def storage(self) -> typing.Any:
@@ -54,15 +70,15 @@ class BaseAdapter(ABC):
         """Filter documents based on function call."""
 
     @abstractmethod
-    def sample(self, size: int = 20):
-        """Draw random sample."""
-
-    @abstractmethod
     def dump(self, storage: typing.Any = None):
         """Dump stored data into a storage."""
 
     @abstractmethod
-    def cursor(self):
+    def count(self) -> int:
+        """Return number of entries in the collection."""
+
+    @abstractmethod
+    def cursor(self) -> BaseCursor:
         """Initialize cursor to the beginning of a collection.
 
         The cursor must have implemented at least the following functionality:
@@ -73,31 +89,7 @@ class BaseAdapter(ABC):
     def is_connected(self):
         return self._storage is not None
 
-    def count(self) -> int:
-        """Return number of entries in the collection."""
-        return self._count
+    def sample(self, sample_size: int = 20):
+        """Draw random sample."""
+        return random.choices(self._data, k=sample_size)
 
-    def next(self):
-        """Get next entry from the collection."""
-        if self._cursor is None:
-            # cursor factory method
-            self._cursor = self.cursor()
-
-        self._cursor.batch_size(1)
-
-        return self._cursor.next()
-
-    def next_batch(self, batch_size: int = 20):
-        """Get next batch of entries from the collection."""
-        if batch_size <= 0:
-            raise ValueError(
-                f"Argument `batch_size` expected to be > 0"
-            )
-
-        if self._cursor is None:
-            # cursor factory method
-            self._cursor = self.cursor()
-
-        self._cursor.batch_size(batch_size)
-
-        return self._cursor.next()
