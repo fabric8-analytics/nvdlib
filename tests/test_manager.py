@@ -7,7 +7,7 @@ import psutil
 import tempfile
 import unittest
 
-from nvdlib.collector import Collector
+from nvdlib.collection import Collection
 from nvdlib.manager import FeedManager, JSONFeed, JSONFeedMetadata
 
 
@@ -373,7 +373,7 @@ class TestFeedManager(unittest.TestCase):
 
             # loaded the downloaded feeds
             # (maybe a lock on the tmp feed files would be a good idea
-            #  for testing unknown environment?)
+            #  for testing in unknown environment?)
             feeds = feed_manager.load_feeds(feed_names, data_dir=data_dir)
 
             self.assertTrue(feeds)
@@ -388,6 +388,28 @@ class TestFeedManager(unittest.TestCase):
 
             self.assertTrue(feeds)
             self.assertTrue(all(feed.is_loaded() for feed in feeds.values()))
+
+    def test_fetch_feeds(self):
+        """Test FeedManager `fetch_feeds` method."""
+        feed_names = ['recent', 'modified']
+        data_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
+
+        with FeedManager(data_dir=data_dir) as feed_manager:
+            # unloaded feeds
+            feeds = feed_manager.fetch_feeds(feed_names)
+
+            self.assertTrue(feeds)
+            self.assertTrue(os.listdir(_TEMP_DATA_DIR))
+            self.assertTrue(not any(feed.is_loaded() for feed in feeds.values()))
+
+            # ---
+            # existing
+
+            # loaded feeds
+            feeds = feed_manager.fetch_feeds(['sample'], data_dir='data/')
+
+            self.assertTrue(feeds)
+            self.assertTrue(not any(feed.is_loaded() for feed in feeds.values()))
 
     def test_collect(self):
         """Test FeedManager `collect` method."""
@@ -406,12 +428,12 @@ class TestFeedManager(unittest.TestCase):
             # query List[str]
             collector = feed_manager.collect(feed_names)
 
-            self.assertIsInstance(collector, Collector)
+            self.assertIsInstance(collector, Collection)
 
             # query List[JSONFeed]
             collector = feed_manager.collect(feeds)
 
-            self.assertIsInstance(collector, Collector)
+            self.assertIsInstance(collector, Collection)
 
     def test_feeds_check(self):
         """Test FeedManager `feeds_check` method."""

@@ -23,7 +23,7 @@ import typing
 from typing import Union
 
 from nvdlib import config, model, utils
-from nvdlib.collector import Collector
+from nvdlib.collection import Collection
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ class JSONFeedMetadata(object):
                                                                             last_modified=self._last_modified)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(feed_name={self._name}, data_dir={self._data_dir})"
+        return f"{self.__class__.__name__}(feed_name='{self._name}', data_dir='{self._data_dir}')"
 
     @property
     def data(self) -> typing.Union[str, dict, None]:
@@ -115,7 +115,8 @@ class JSONFeedMetadata(object):
         loop = loop or asyncio.get_event_loop()
 
         if await self.url_exists(self._name):
-            async with aiohttp.ClientSession(loop=loop) as session:
+            timeout = aiohttp.ClientTimeout(total=60)
+            async with aiohttp.ClientSession(loop=loop, timeout=timeout) as session:
                 async with session.get(self._metadata_url) as response:
                     if response.status != 200:
                         raise Exception(
@@ -233,7 +234,8 @@ class JSONFeedMetadata(object):
         metadata_url = cls.METADATA_URL_TEMPLATE.format(feed=feed_name)
         loop = loop or asyncio.get_event_loop()
 
-        async with aiohttp.ClientSession(loop=loop) as session:
+        timeout = aiohttp.ClientTimeout(total=60)
+        async with aiohttp.ClientSession(loop=loop, timeout=timeout) as session:
             async with session.head(metadata_url) as response:
                 return response.status == 200
 
@@ -322,7 +324,7 @@ class JSONFeed(object):
         self._is_loaded = False
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(feed_name={self._name}, data_dir={self._data_dir})"
+        return f"{self.__class__.__name__}(feed_name='{self._name}', data_dir='{self._data_dir}')"
 
     def __str__(self):
         return repr(self)
@@ -379,10 +381,12 @@ class JSONFeed(object):
 
         loop = loop or asyncio.get_event_loop()
 
-        _LOGGER.info(f"Downloading feed `{self._name}`...")
+        status = ["Downloading", "Updating"][self._is_downloaded]
+        _LOGGER.info(f"{status} feed `{self._name}`...")
 
         data: bytes
-        async with aiohttp.ClientSession(loop=loop) as session:
+        timeout = aiohttp.ClientTimeout(total=config.FEED_DOWNLOAD_TIMEOUT)
+        async with aiohttp.ClientSession(loop=loop, timeout=timeout) as session:
             async with session.get(self._data_url) as response:
                 if response.status != 200:
                     raise IOError('Unable to download {feed} feed.'.format(feed=self._name))
@@ -578,6 +582,53 @@ class FeedManager(object):
 
         return feeds
 
+    def fetch_feeds(self,
+                    feed_names: typing.List[Union[str, int]],
+                    data_dir: str = None,
+                    update=False) -> typing.Dict[str, JSONFeed]:
+        """Asynchronously fetch proxy of JSON feeds.
+
+        This method is the recommended method for most use cases.
+
+        NOTES:
+            - Updates are not performed to existing feeds if not explicitly specified.
+            - Proxies of feeds are used, in order to load the feed into memory directly, FeedManager.load_feeds()
+            need to be called on desired list of feeds.
+        """
+        data_dir = data_dir or self._data_dir
+
+        self.feeds_check(*feed_names, data_dir=data_dir)
+
+        _LOGGER.info(f"Fetching feeds...")
+
+        # remove local feeds
+        local_feed_names = list(
+            filter(lambda f: FeedManager.feeds_exist(f, data_dir=data_dir, loop=self._loop), feed_names)
+        )
+
+        _LOGGER.debug(f"Local feeds found: {local_feed_names}")
+
+        if update:
+            feed_dict = self.download_feeds(local_feed_names, data_dir, load=False)
+
+        else:
+            feed_dict = {
+                feed: JSONFeed(feed_name=feed, data_dir=data_dir)
+                for feed in local_feed_names
+            }
+
+        distinct_feed_names = [
+            feed for feed in feed_names
+            if feed not in feed_dict
+        ]
+
+        _LOGGER.debug(f"Remote feeds found: {distinct_feed_names}")
+
+        if any(distinct_feed_names):
+            feed_dict.update(self.download_feeds(distinct_feed_names, data_dir, load=False))
+
+        return feed_dict
+
     def collect(self, feeds: typing.List[Union[str, int, JSONFeed]] = None):
         """Return collection of Documents to run queries on."""
 
@@ -588,26 +639,34 @@ class FeedManager(object):
 
             feed_data = feeds.values() if isinstance(feeds, dict) else feeds
 
+            _LOGGER.info(f"Collecting entries...")
+
             for feed in feed_data:
 
                 _LOGGER.debug(f"Collecting entries from feed '{feed}'")
 
                 # type check
-                if isinstance(feed, str) or isinstance(feed, int):
+                if isinstance(feed, JSONFeed):
+                    self._loop.run_until_complete(feed.load())
+
+                elif isinstance(feed, str) or isinstance(feed, int):
                     feed_dict = self.load_feeds([feed])
+
                     feed_count = len(feed_dict)
                     assert feed_count == 1, \
                         f"Unexpected length of `feed_dict`: {feed_count}"
 
                     feed, = feed_dict.values()
 
-                elif not isinstance(feed, JSONFeed):
+                else:
                     raise TypeError(
                         f"Expected type `{Union[str, int, JSONFeed]}`, got `{type(feed)}`"
                     )
 
                 for entry in feed.data['CVE_Items']:
                     yield entry
+
+                feed.flush()
 
         data_iterator = iter_feeds()
 
@@ -622,7 +681,7 @@ class FeedManager(object):
         pool.close()
         pool.join()
 
-        return Collector(
+        return Collection(
             data_iterator=document_iterator,
         )
 
@@ -657,7 +716,7 @@ class FeedManager(object):
             )
 
     @staticmethod
-    def feeds_exist(*feed_names, data_dir: str = None, loop: asyncio.BaseEventLoop = None):
+    def feeds_exist(*feed_names, data_dir: str = None, loop: asyncio.BaseEventLoop = None) -> bool:
         """Check feeds whether exist locally.
 
         :raises: ValueError if feed does not exist.
