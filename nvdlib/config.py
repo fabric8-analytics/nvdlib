@@ -9,3 +9,6 @@ DEFAULT_LOGGING_LEVEL = os.environ.get('DEFAULT_LOGGING_LEVEL', 'WARNING')
 
 # adapter
 ADAPTER = os.environ.get('ADAPTER', 'DEFAULT')
+
+# download
+FEED_DOWNLOAD_TIMEOUT = 300  # seconds

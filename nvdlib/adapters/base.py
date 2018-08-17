@@ -27,8 +27,10 @@ class BaseCursor(ABC):
 class BaseAdapter(ABC):
     """Abstract class defining storage adapter."""
 
-    def __init__(self):
+    def __init__(self, name: str):
+        self._name: str = name
         self._storage: typing.Any = None
+
         self._data: typing.Any = None
 
         self._cursor: typing.Any = None
@@ -48,6 +50,10 @@ class BaseAdapter(ABC):
     @property
     def storage(self) -> typing.Any:
         return self._storage
+
+    @property
+    def name(self):
+        return self._name
 
     @abstractmethod
     def connect(self, storage: str = None):

@@ -30,6 +30,8 @@ def register_lock(*fd):
     global __LOCKS
 
     for tolock_fd in fd:
+        if tolock_fd is None:  # this can happen with default initialization of an adapter
+            continue
         fcntl.flock(tolock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     __LOCKS.add(fd)
@@ -38,10 +40,14 @@ def register_lock(*fd):
 def release_lock(*fd):
     """Release locks on given file descriptors and close them."""
     for locked_fd in fd:
+        if locked_fd is None:  # this can happen with default initialization of an adapter
+            continue
         fcntl.flock(locked_fd, fcntl.LOCK_UN)
+
         # wait for lock to be released
         time.sleep(0.1)
 
+        # flush the buffer and close the descriptor
         locked_fd.close()
 
 
@@ -57,7 +63,7 @@ class DefaultAdapter(BaseAdapter):
     def __init__(self, storage: str = None, cache_size: int = None):
         """Initialize DefaultAdapter instance."""
         # run this before any other initialization
-        super(DefaultAdapter, self).__init__()
+        super(DefaultAdapter, self).__init__(name='DEFAULT')
 
         self._count = 0
 
@@ -316,7 +322,6 @@ class Cursor(BaseCursor):
                 batch[i] = next(self._data_iterator)
                 self._index += 1
             except StopIteration:
-                batch[i:] = None
                 break
 
         return batch

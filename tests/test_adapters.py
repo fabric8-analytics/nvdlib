@@ -27,7 +27,7 @@ class TestDefaultAdapter(unittest.TestCase):
 
         adapter = DefaultAdapter()
 
-        self.assertIsInstance(adapter, TestDefaultAdapter)
+        self.assertIsInstance(adapter, DefaultAdapter)
 
     def test_connect(self):
         """Test DefaultAdapters `connect` method."""
@@ -91,9 +91,6 @@ class TestDefaultAdapter(unittest.TestCase):
 
     def test_filter(self):
         """Test DefaultAdapters `filter` method."""
-
-    def test_sample(self):
-        """Test DefaultAdapters `sample` method."""
 
     def test_cursor(self):
         """Test DefaultAdapters `cursor` method."""
@@ -160,4 +157,4 @@ class TestDefaultAdapter(unittest.TestCase):
         self.assertEqual(len(year_set), 3)
 
         # exact check
-        self.assertEqual(year_set, {2002, 2010, 2018})
+        self.assertEqual(year_set, {'2004', '2012', '2020'})
