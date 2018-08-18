@@ -61,8 +61,8 @@ class TestDefaultAdapter(unittest.TestCase):
         ]))
 
         # ---
-        # dump
-        adapter.cache()
+        # dump shard
+        adapter.dump_shard()
 
         # dump has been created
         self.assertEqual(len(os.listdir(tmp_storage)), 2)
@@ -72,14 +72,14 @@ class TestDefaultAdapter(unittest.TestCase):
             self.assertTrue(f.read())
 
         # ---
-        # test dumping multiple batches
+        # test dumping multiple shards
 
         # create new storage for clear env
         tmp_storage = tempfile.mkdtemp(prefix='tests_', suffix='_adapters')
 
-        adapter = DefaultAdapter(storage=tmp_storage, cache_size=2)  # cache every second file
+        adapter = DefaultAdapter(storage=tmp_storage, shard_size=2)  # cache every other entry
         adapter.connect()
-        adapter.process(data=[DOCUMENT] * 10)  # should create 5 batch files + 1 meta file
+        adapter.process(data=[DOCUMENT] * 10)  # should create 5 shards + 1 meta file
 
         self.assertEqual(len(os.listdir(tmp_storage)), 6)
 
@@ -124,9 +124,9 @@ class TestDefaultAdapter(unittest.TestCase):
         # create new storage for clear env
         tmp_storage = tempfile.mkdtemp(prefix='tests_', suffix='_adapters')
 
-        adapter = DefaultAdapter(storage=tmp_storage, cache_size=2)  # cache every second file
+        adapter = DefaultAdapter(storage=tmp_storage, shard_size=2)  # dump every other entry
         adapter.connect()
-        adapter.process(data=[DOCUMENT] * 10)  # should create 5 cache files + 1 meta file
+        adapter.process(data=[DOCUMENT] * 10)  # should create 5 shards + 1 meta file
 
         self.assertEqual(len(os.listdir(tmp_storage)), 6)
 
