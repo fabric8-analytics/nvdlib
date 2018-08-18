@@ -57,10 +57,10 @@ atexit.register(release_lock, *__LOCKS)
 class DefaultAdapter(BaseAdapter):
     """Default storage adapter."""
 
-    __CACHE_SIZE = 5000
+    __SHARD_SIZE = 5000
     __BITMASK_SIZE = 32
 
-    def __init__(self, storage: str = None, cache_size: int = None):
+    def __init__(self, storage: str = None, shard_size: int = None):
         """Initialize DefaultAdapter instance."""
         # run this before any other initialization
         super(DefaultAdapter, self).__init__(name='DEFAULT')
@@ -68,31 +68,31 @@ class DefaultAdapter(BaseAdapter):
         self._count = 0
 
         self._storage = storage
-        self._cache_size = cache_size or self.__CACHE_SIZE
+        self._shard_size = shard_size or self.__SHARD_SIZE
 
-        self._data: typing.List[Document] = [None] * self._cache_size
+        self._data: typing.List[Document] = [None] * self._shard_size
         self._meta: typing.Dict[str, dict] = dict()
 
         self._meta_fpath = None
         self._meta_fd = None
-        self._batches = set()  # set of batch file descriptors
+        self._shards = set()  # set of file descriptors
 
     def __del__(self):
         """Finalize object destruction."""
-        release_lock(*self._batches, self._meta_fd)
+        release_lock(*self._shards, self._meta_fd)
 
     @property
-    def cache_size(self):
-        return self._cache_size
+    def shard_size(self):
+        return self._shard_size
 
-    def set_cache_size(self, size: int):
-        """Resize storage cache size.
+    def set_shard_size(self, size: int):
+        """Resize storage shard size.
 
         NOTE: This is an expansive operation as all recorded data has to be processed again
         to match the new storage size.
         It is recommended to provide desired cache size during initialization.
         """
-        if size == self._cache_size:
+        if size == self._shard_size:
             return
 
         raise NotImplementedError("This functionality has not been implemented yet. Please use recommended approach"
@@ -128,7 +128,7 @@ class DefaultAdapter(BaseAdapter):
 
             register_lock(batch_fd)
 
-            self._batches.add(batch_fd)
+            self._shards.add(batch_fd)
 
         return self
 
@@ -150,9 +150,9 @@ class DefaultAdapter(BaseAdapter):
 
             count += 1
 
-            index = count % self._cache_size
+            index = count % self._shard_size
             if count and index == 0:
-                self.cache()
+                self.dump_shard()
 
         self._count = count
 
@@ -178,9 +178,9 @@ class DefaultAdapter(BaseAdapter):
         """Dump stored data into a storage."""
         raise NotImplementedError
 
-    def cache(self):
-        """Cache stored data."""
-        batch_number = len(self._batches)
+    def dump_shard(self):
+        """Store data as shards."""
+        shard_number = len(self._shards)
 
         year_pattern = r"(?:CVE-)(\d+)(?:-\d+)"
 
@@ -194,23 +194,23 @@ class DefaultAdapter(BaseAdapter):
         # year mask
         encoded_bitmask = self._encode(years_in_batch)
         # construct file name
-        dump_file = f"{encoded_bitmask}.{batch_number}.{timestamp}"
-        dump_path = os.path.join(self._storage, dump_file)
+        shard_file = f"{encoded_bitmask}.{shard_number}.{timestamp}"
+        dump_path = os.path.join(self._storage, shard_file)
 
         for key in self._meta.keys():
-            self._meta[key].update({'batch': dump_file})
+            self._meta[key].update({'shard': shard_file})
 
         # dump batch
-        dump_fd = open(dump_path, 'a+b')
+        shard = open(dump_path, 'a+b')
 
-        register_lock(dump_fd)
+        register_lock(shard)
 
-        pickle.dump(self._data, dump_fd)
+        pickle.dump(self._data, shard)
 
         # flush dump buffer
-        dump_fd.flush()
+        shard.flush()
 
-        self._batches.add(dump_fd)
+        self._shards.add(shard)
 
         # dump meta (overwrite the old file)
         self._meta_fd.seek(0)
@@ -224,9 +224,9 @@ class DefaultAdapter(BaseAdapter):
 
     def cursor(self):
         """Initialize cursor to the beginning of a collection."""
-        if self._batches:
+        if self._shards:
             cursor = Cursor(
-                batches=self._batches
+                shards=self._shards
             )
         else:
             cursor = Cursor(
@@ -273,7 +273,7 @@ class DefaultAdapter(BaseAdapter):
         gc.collect()
 
         self._count = 0
-        self._data: typing.List[Document] = [None] * self._cache_size
+        self._data: typing.List[Document] = [None] * self._shard_size
 
 
 class Cursor(BaseCursor):
@@ -281,19 +281,19 @@ class Cursor(BaseCursor):
 
     def __init__(self,
                  data: typing.Iterable = None,
-                 batches: typing.Iterable[io.BytesIO] = None,
+                 shards: typing.Iterable[io.BytesIO] = None,
                  batch_size: int = 20):
         """Initialize iterator over data or batch files (only one needs to be specified)."""
-        if not any([data, batches]):
+        if not any([data, shards]):
             raise ValueError("Either in-memory data or persistent storage files must be provided.")
 
-        if all([data, batches]):
+        if all([data, shards]):
             raise ValueError("Cursor can not iterate over both in-memory data and persistent storage.")
 
         self._index = 0
         self._data = data
 
-        self._batches = batches
+        self._shards = shards
         self._batch_size = batch_size
 
         # initialize iterator
@@ -337,7 +337,7 @@ class Cursor(BaseCursor):
             yield from iter(self._data)
 
         else:
-            for batch_dump in self._batches:
-                batch_dump.seek(0)
-                data = pickle.load(batch_dump, encoding='utf-8')
+            for shard in self._shards:
+                shard.seek(0)
+                data = pickle.load(shard, encoding='utf-8')
                 yield from iter(data)
