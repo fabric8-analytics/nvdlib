@@ -81,5 +81,8 @@ class BaseAdapter(ABC):
 
     def sample(self, sample_size: int = 20):
         """Draw random sample."""
-        return random.choices(self._data, k=sample_size)
+        return random.choices(
+            [item for item in self._data if item is not None],
+            k=sample_size
+        )
 

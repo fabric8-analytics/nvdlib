@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from nvdlib.adapters import DefaultAdapter
+from nvdlib.collection import Collection
 from nvdlib.model import Document
 
 
@@ -83,14 +84,24 @@ class TestDefaultAdapter(unittest.TestCase):
 
         self.assertEqual(len(os.listdir(tmp_storage)), 6)
 
-    def test_select(self):
-        """Test DefaultAdapters `select` method."""
+    def test_find(self):
+        """Test DefaultAdapters `find` method."""
+        tmp_storage = tempfile.mkdtemp(prefix='tests_', suffix='_adapters')
 
-    def test_project(self):
-        """Test DefaultAdapters `project` method."""
+        adapter = DefaultAdapter(storage=tmp_storage)
 
-    def test_filter(self):
-        """Test DefaultAdapters `filter` method."""
+        adapter.connect()
+        adapter.process(data=[DOCUMENT])
+
+        collection = adapter.find()
+
+        self.assertIsInstance(collection, Collection)
+        self.assertEqual(collection.count(), 1)
+
+        # not finding anything
+        collection = adapter.find()
+        self.assertIsInstance(collection, Collection)
+        self.assertEqual(collection.count(), 0)
 
     def test_cursor(self):
         """Test DefaultAdapters `cursor` method."""
@@ -138,6 +149,32 @@ class TestDefaultAdapter(unittest.TestCase):
 
         self.assertTrue(all(batch))
         self.assertEqual(len(batch), 5)
+
+    def test_sample(self):
+        """Test DefaultAdapters `sample` method."""
+        tmp_storage = tempfile.mkdtemp(prefix='tests_', suffix='_adapters')
+
+        adapter = DefaultAdapter(storage=tmp_storage, shard_size=2)  # dump every other entry
+        adapter.connect()
+        adapter.process(data=[DOCUMENT] * 15)  # should create 5 shards + 1 meta file
+
+        # small sample size -- draw from buffer
+        self.assertGreater(len(adapter._data), 0)
+
+        sample = adapter.sample(sample_size=1)
+        self.assertEqual(len(sample), 1)
+        self.assertIsInstance(sample[0], Document)
+
+        # ---
+        # bigger sample size
+        sample = adapter.sample(sample_size=5)
+        self.assertEqual(len(sample), 5)
+        self.assertTrue(all([isinstance(s, Document) for s in sample]))
+
+        # ---
+        # too big
+        with self.assertRaises(ValueError):
+            _ = adapter.sample(sample_size=20)
 
     def test__encode(self):
         """Test DefaultAdapters `_encode` method."""

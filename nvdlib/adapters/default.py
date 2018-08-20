@@ -11,17 +11,20 @@ import datetime
 import time
 
 import itertools
+import random
 import typing
 
 import pickle
 import ujson
+
+from collections import OrderedDict
 
 from nvdlib.adapters.base import BaseAdapter, BaseCursor
 from nvdlib.model import Document
 
 
 __LOCKS = set()
-__DUMP_PATTERN = r"(?<hexmask>0[xX][0-9a-fA-F]+)(?<identifier>\d+)(?<timestamp>(\d+).(\d+))"
+__DUMP_PATTERN = r"(?<identifier>\d+)(?<hexmask>0[xX][0-9a-fA-F]+)(?<size>[0-9]+)(?<timestamp>(\d+).(\d+))"
 
 
 def register_lock(*fd):
@@ -70,7 +73,13 @@ class DefaultAdapter(BaseAdapter):
         self._shard_size = shard_size or self.__SHARD_SIZE
 
         self._data: typing.List[Document] = [None] * self._shard_size
-        self._meta: typing.Dict[str, dict] = dict()
+
+        self._meta: typing.Dict[str, dict] = {
+            'cve_data': OrderedDict(),
+            'shard_data': OrderedDict()
+        }
+        self._cve_meta = self._meta['cve_data']
+        self._shard_meta = self._meta['shard_data']
 
         self._meta_fpath = None
         self._meta_fd = None
@@ -119,7 +128,10 @@ class DefaultAdapter(BaseAdapter):
         # read meta and set cursor to the beginning for future usage
         self._meta = ujson.loads(self._meta_fd.read().decode('utf-8') or '{}')
 
-        for value_dict in self._meta.values():
+        self._cve_meta = self._meta.get('cve_data', dict())
+        self._shard_meta = self._meta.get('shard_data', dict())
+
+        for value_dict in self._cve_meta.values():
 
             batch_file = value_dict['batch']
             batch_fpath = os.path.join(self._storage, batch_file)
@@ -144,7 +156,7 @@ class DefaultAdapter(BaseAdapter):
             document_id: str = document.cve.id_
 
             # store meta pointer to current batch and position
-            self._meta[document_id] = {'index': index}
+            self._cve_meta[document_id] = {'index': index}
             self._data[index] = document
 
             count += 1
@@ -171,21 +183,21 @@ class DefaultAdapter(BaseAdapter):
 
         year_pattern = r"(?:CVE-)(\d+)(?:-\d+)"
 
-        timestamp = datetime.datetime.now().timestamp()
+        timestamp = int(datetime.datetime.now().timestamp())
 
         years_in_batch = set(map(
             lambda cve_id: re.findall(year_pattern, cve_id)[0],
-            self._meta.keys()
+            self._cve_meta.keys()
         ))
 
         # year mask
         encoded_bitmask = self._encode(years_in_batch)
         # construct file name
-        shard_file = f"{encoded_bitmask}.{shard_number}.{timestamp}"
+        shard_file = f"{shard_number}.{encoded_bitmask}.{len(self._data)}.{timestamp}"
         dump_path = os.path.join(self._storage, shard_file)
 
-        for key in self._meta.keys():
-            self._meta[key].update({'shard': shard_file})
+        for key in self._cve_meta.keys():
+            self._cve_meta[key].update({'shard': shard_file})
 
         # dump batch
         shard = open(dump_path, 'a+b')
@@ -198,6 +210,13 @@ class DefaultAdapter(BaseAdapter):
         shard.flush()
 
         self._shards.add(shard)
+
+        self._shard_meta[shard_number] = OrderedDict(
+            id=shard_number,
+            mask=encoded_bitmask,
+            size=len(self._data),
+            timestamp=timestamp
+        )
 
         # dump meta (overwrite the old file)
         self._meta_fd.seek(0)
@@ -221,6 +240,69 @@ class DefaultAdapter(BaseAdapter):
             )
 
         return cursor
+
+    def sample(self, sample_size: int = 20, entire=False):
+        """Draw random sample.
+
+        If `entire` is set to True (default: False), draws the sample from stored
+        data otherwise only from buffer.
+
+        NOTE: In case there is a need for more accurate representation of stored data,
+        it is recommended to use `entire=True`, otherwise due to its significant performance
+        overhead, default value (False) is recommended.
+        """
+        sample_size = int(sample_size)
+
+        if sample_size <= 0:
+            raise ValueError("`sample_size` must be >= 0")
+
+        if len(self._data) >= sample_size and not entire:
+            # use default method in case enough data are present in the buffer
+            sample = super(DefaultAdapter, self).sample(sample_size=sample_size)
+
+        else:  # use all shards in order to get more accurate distribution
+
+            # check if there is enough data
+            total_data = sum([
+                shard['size'] for shard in self._shard_meta.values()
+            ])
+
+            if total_data < sample_size:
+                raise ValueError("`sample_size` can not be greater than the total amount of data.")
+
+            num_shards = len(self._shards)
+            avg = sample_size // min(num_shards, sample_size)
+            samples_per_shard = [0] * num_shards
+
+            # evenly distribute
+            distributed = 0
+            while distributed < sample_size:
+                for i, shard in enumerate(self._shard_meta.values()):
+                    shard_size = shard['size']
+                    shard_sample = avg if avg <= shard_size else shard_size
+
+                    distributed += shard_sample
+                    samples_per_shard[i] = shard_sample
+
+                    if distributed >= sample_size:
+                        break
+
+            sample = [None] * sample_size
+
+            for i, shard in enumerate(self._shards):
+                shard_sample_size = samples_per_shard[i]
+
+                if not shard_sample_size:
+                    continue
+
+                shard.seek(0)
+                shard_data = pickle.load(shard, encoding='utf-8')
+
+                sample[i:(i + shard_sample_size)] = random.choices(
+                    shard_data, k=shard_sample_size
+                )
+
+        return sample
 
     def _encode(self, years: typing.Iterable) -> str:
         """Encode binary mask into hexadecimal format."""
