@@ -21,36 +21,52 @@ from collections import OrderedDict
 
 from nvdlib.adapters.base import BaseAdapter, BaseCursor
 from nvdlib.model import Document
+from nvdlib import utils
+
+import nvdlib.query_selectors as selectors
 
 
 __LOCKS = set()
-__DUMP_PATTERN = r"(?<identifier>\d+)(?<hexmask>0[xX][0-9a-fA-F]+)(?<size>[0-9]+)(?<timestamp>(\d+).(\d+))"
+
+_CVE_ID_PATTERN = r"CVE-(20[0-9]{2})-([0-9]+)"
+_DUMP_PATTERN = r"(?<identifier>\d+)(?<hexmask>0[xX][0-9a-fA-F]+)(?<size>[0-9]+)(?<timestamp>(\d+).(\d+))"
 
 
 def register_lock(*fd):
     """Register and lock given file descriptors."""
     global __LOCKS
 
+    tolock_fd: io.BytesIO
     for tolock_fd in fd:
         if tolock_fd is None:  # this can happen with default initialization of an adapter
             continue
+
         fcntl.flock(tolock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
-    __LOCKS.add(fd)
+        # add lock to global handle
+        __LOCKS.add(fd)
 
 
 def release_lock(*fd):
     """Release locks on given file descriptors and close them."""
+    locked_fd: io.BytesIO
     for locked_fd in fd:
         if locked_fd is None:  # this can happen with default initialization of an adapter
             continue
-        fcntl.flock(locked_fd, fcntl.LOCK_UN)
 
+        fcntl.flock(locked_fd, fcntl.LOCK_UN)
         # wait for lock to be released
         time.sleep(0.1)
 
-        # flush the buffer and close the descriptor
-        locked_fd.close()
+        if not locked_fd.closed:
+            # flush the buffer and close the descriptor
+            locked_fd.close()
+
+        try:
+            # remove lock from global handle
+            __LOCKS.remove(fd)
+        except KeyError:
+            pass
 
 
 atexit.register(release_lock, *__LOCKS)
@@ -83,7 +99,9 @@ class DefaultAdapter(BaseAdapter):
 
         self._meta_fpath = None
         self._meta_fd = None
-        self._shards = set()  # set of file descriptors
+        self._shards = list()  # set of file descriptors
+
+        self._schema: dict = None
 
     def __del__(self):
         """Finalize object destruction."""
@@ -139,7 +157,7 @@ class DefaultAdapter(BaseAdapter):
 
             register_lock(batch_fd)
 
-            self._shards.add(batch_fd)
+            self._shards.append(batch_fd)
 
         return self
 
@@ -156,13 +174,13 @@ class DefaultAdapter(BaseAdapter):
             document_id: str = document.cve.id_
 
             # store meta pointer to current batch and position
-            self._cve_meta[document_id] = {'index': index}
+            self._cve_meta[document_id] = {'index': index, 'shard': None}
             self._data[index] = document
 
             count += 1
 
             index = count % self._shard_size
-            if count and index == 0:
+            if index == 0:
                 self.dump_shard()
 
         self._count = count
@@ -170,14 +188,53 @@ class DefaultAdapter(BaseAdapter):
         return self
 
     def count(self) -> int:
-        """Return number of entries in the collection."""
+        """Return number of documents in the collection."""
         return self._count
+
+    def find(self, selectors: typing.Dict[str, typing.Any] = None) -> typing.Iterator[Document]:
+        """Find documents based on given selectors."""
+        if any(self._data):  # for consistency, dump all the data into shards
+            self.dump_shard(flush=False)
+
+        # release locks and close descriptors (pass ownership to threads)
+        # release_lock(*self._shards, self._meta_fd)
+
+        schema = Document()
+
+        for key, value in selectors.items():
+            if not utils.rhasattr(schema, key):
+                raise ValueError(f"Invalid key: {key}")
+
+        for shard in self._shards:
+            yield from self._find(selectors, shard)
+
+    @staticmethod
+    def _find(selector: dict, shard: io.BytesIO):
+
+        shard.seek(0)
+        data = pickle.load(shard)
+
+        entry: Document
+        for entry in data:
+            discard = False
+            for attr, pattern in selector.items():
+                if not isinstance(pattern, typing.Callable):
+                    select: typing.Callable = selectors.match(pattern)
+                else:
+                    select: typing.Callable = pattern
+
+                if not select(entry, attr):
+                    discard = True
+                    break
+
+            if not discard:
+                yield entry
 
     def dump(self, storage: typing.Any = None):
         """Dump stored data into a storage."""
         raise NotImplementedError
 
-    def dump_shard(self):
+    def dump_shard(self, flush=True):
         """Store data as shards."""
         shard_number = len(self._shards)
 
@@ -190,31 +247,31 @@ class DefaultAdapter(BaseAdapter):
             self._cve_meta.keys()
         ))
 
-        # year mask
-        encoded_bitmask = self._encode(years_in_batch)
+        shard_data = [item for item in self._data if item]
+
         # construct file name
-        shard_file = f"{shard_number}.{encoded_bitmask}.{len(self._data)}.{timestamp}"
+        encoded_bitmask = self._encode(years_in_batch)
+        shard_file = f"{shard_number}.{encoded_bitmask}.{len(shard_data)}.{timestamp}"
+
         dump_path = os.path.join(self._storage, shard_file)
 
         for key in self._cve_meta.keys():
-            self._cve_meta[key].update({'shard': shard_file})
+            self._cve_meta[key].update({'shard': shard_number})
 
         # dump batch
         shard = open(dump_path, 'a+b')
-
         register_lock(shard)
-
-        pickle.dump(self._data, shard)
+        pickle.dump(shard_data, shard)
 
         # flush dump buffer
         shard.flush()
 
-        self._shards.add(shard)
+        self._shards.append(shard)
 
         self._shard_meta[shard_number] = OrderedDict(
             id=shard_number,
             mask=encoded_bitmask,
-            size=len(self._data),
+            size=len(shard_data),
             timestamp=timestamp
         )
 
@@ -226,7 +283,8 @@ class DefaultAdapter(BaseAdapter):
         # flush meta buffer
         self._meta_fd.flush()
 
-        self._flush()
+        if flush:
+            self._flush()
 
     def cursor(self):
         """Initialize cursor to the beginning of a collection."""

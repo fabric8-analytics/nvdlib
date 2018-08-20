@@ -7,8 +7,9 @@ import tempfile
 import unittest
 
 from nvdlib.adapters import DefaultAdapter
-from nvdlib.collection import Collection
 from nvdlib.model import Document
+
+import nvdlib.query_selectors as selectors
 
 
 SAMPLE_CVE_PATH = 'data/cve-1.0-sample.json'
@@ -91,17 +92,31 @@ class TestDefaultAdapter(unittest.TestCase):
         adapter = DefaultAdapter(storage=tmp_storage)
 
         adapter.connect()
-        adapter.process(data=[DOCUMENT])
+        adapter.process(data=[DOCUMENT] * 10)
 
-        collection = adapter.find()
+        # invalid key
+        with self.assertRaises(ValueError):
+            _ = list(adapter.find({'wrong-key': 'non-existing'}))
 
-        self.assertIsInstance(collection, Collection)
-        self.assertEqual(collection.count(), 1)
+        # flush between runs (not to shard all over again)
+        adapter._flush()
 
         # not finding anything
-        collection = adapter.find()
-        self.assertIsInstance(collection, Collection)
-        self.assertEqual(collection.count(), 0)
+        collection = list(adapter.find({'cve.id_': 'non-existing'}))
+        self.assertEqual(len(collection), 0)
+
+        # find specific id
+        collection = list(adapter.find({'cve.id_': 'CVE-2015-0001'}))
+        self.assertEqual(len(collection), 10)
+
+        # multiple selectors
+        collection = list(adapter.find({'cve.id_': 'CVE-2015-0001',
+                                        'impact.impact_score': 2.9}))
+        self.assertEqual(len(collection), 10)
+
+        # special selector
+        collection = list(adapter.find({'cve.id_': selectors.match('CVE-2015-0001')}))
+        self.assertEqual(len(collection), 10)
 
     def test_cursor(self):
         """Test DefaultAdapters `cursor` method."""

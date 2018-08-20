@@ -22,17 +22,12 @@ class Collection(object):
         self._name: str = None
 
         self._count: int = 0
-        self._clear_storage = True
+        self._clear_storage = True  # in the future, this argument can be modifiable
 
-        if storage:
-            self._clear_storage = False
-            self._storage = storage
-
-        else:
-            self._storage = storage or os.path.join(
-                tempfile.gettempdir(),
-                f"nvdlib/.dump/{id(self)}"
-            )
+        self._storage = storage or os.path.join(
+            tempfile.gettempdir(),
+            f"nvdlib/.dump/{id(self)}"
+        )
 
         # create directory
         os.makedirs(self._storage)
@@ -46,7 +41,6 @@ class Collection(object):
         self._adapter.connect(storage=self._storage)
         self._adapter.process(data_iterator)
 
-        self._data = self._adapter.sample()
         self._count = self._adapter.count()
 
     @property
@@ -85,8 +79,20 @@ class Collection(object):
     def storage(self):
         return self._storage
 
-    def count(self):
+    def count(self) -> int:
+        """Return number of documents in the collection."""
         return self._adapter.count()
+
+    def find(self,
+             selector: typing.Dict[str, typing.Any] = None) -> "Collection":
+        """Find documents based on given selector."""
+
+        if not selector:
+            return self
+
+        collection: Collection = Collection(self._adapter.find(selectors=selector))
+
+        return collection
 
     def cursor(self):
         return self._adapter.cursor()

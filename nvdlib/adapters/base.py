@@ -63,12 +63,16 @@ class BaseAdapter(ABC):
         """Process given data and store in connected storage."""
 
     @abstractmethod
+    def find(self, selectors: typing.Dict[str, typing.Any] = None):
+        """Find documents based on given selectors."""
+
+    @abstractmethod
     def dump(self, storage: typing.Any = None):
         """Dump stored data into a storage."""
 
     @abstractmethod
     def count(self) -> int:
-        """Return number of entries in the collection."""
+        """Return number of documents in the collection."""
 
     @abstractmethod
     def cursor(self) -> BaseCursor:

@@ -132,8 +132,11 @@ class DescriptionEntry(Entry):
                 value=value
             )
 
-    def __init__(self, data: dict):
-        description_data = data['description_data']
+    def __init__(self, data: dict = None):
+        description_data = list()
+
+        if data is not None:
+            description_data = data['description_data']
 
         super(DescriptionEntry, self).__init__(*description_data)
 
@@ -154,8 +157,11 @@ class ReferenceEntry(Entry):
                 refsource=refsource
             )
 
-    def __init__(self, data: dict):
-        reference_data = data['reference_data']
+    def __init__(self, data: dict = None):
+        reference_data = list()
+
+        if data is not None:
+            reference_data = data['reference_data']
 
         super(ReferenceEntry, self).__init__(*reference_data)
 
@@ -180,25 +186,26 @@ class AffectsEntry(Entry):
                 versions=versions
             )
 
-    def __init__(self, data: dict):
-        vendor_data = data['vendor']['vendor_data']
-
+    def __init__(self, data: dict = None):
         affects_data = list()
 
-        for vendor in vendor_data:
-            vendor_name = vendor['vendor_name']
-            product_data = vendor['product']['product_data']
+        if data is not None:
+            vendor_data = data['vendor']['vendor_data']
 
-            for product in product_data:
-                product_name = product['product_name']
-                version_data = [
-                    v['version_value']
-                    for v in product['version']['version_data']
-                ]
+            for vendor in vendor_data:
+                vendor_name = vendor['vendor_name']
+                product_data = vendor['product']['product_data']
 
-                affects_data.append(
-                    (product_name, vendor_name, version_data)
-                )
+                for product in product_data:
+                    product_name = product['product_name']
+                    version_data = [
+                                        v['version_value']
+                                        for v in product['version']['version_data']
+                                           ]
+
+                    affects_data.append(
+                        (product_name, vendor_name, version_data)
+                    )
 
         super(AffectsEntry, self).__init__(*affects_data)
 
@@ -301,6 +308,9 @@ class Impact(namedtuple('Impact', [
                 impact_score: float = None,
                 cvss: CVSSNode = None,
                 **kwarsg):
+
+        cvss: Impact.CVSSNode = cvss or Impact.CVSSNode()
+
         return super(Impact, cls).__new__(
             cls,
             severity=severity,
@@ -355,6 +365,10 @@ class CVE(namedtuple('CVE', [
                 descriptions: DescriptionEntry = None,
                 **kwargs):
 
+        affects: AffectsEntry = affects or AffectsEntry()
+        references: ReferenceEntry = references or ReferenceEntry()
+        descriptions: DescriptionEntry = descriptions or DescriptionEntry()
+
         return super(CVE, cls).__new__(
             cls,
             id_=id_,
@@ -398,6 +412,12 @@ class Document(namedtuple('Document', [
                 published_date: datetime.datetime = None,
                 modified_date: datetime.datetime = None,
                 **kwargs):
+
+        cve: CVE = cve or CVE()
+        configurations: Configurations = configurations or Configurations()
+        impact: Impact = impact or Impact()
+        published_date: datetime.datetime = None
+        modified_date: datetime.datetime = None
 
         return super(Document, cls).__new__(
             cls,

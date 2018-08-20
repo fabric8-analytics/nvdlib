@@ -81,3 +81,21 @@ def compute_sha256(fpath):
                 break
             sha256.update(data)
     return sha256.hexdigest().lower()
+
+
+def rhasattr(obj, attr: str):
+    try:
+        left, right = attr.split('.', 1)
+    except ValueError:
+        return hasattr(obj, attr)
+
+    return rhasattr(getattr(obj, left), right)
+
+
+def rgetattr(obj, attr: str):
+    try:
+        left, right = attr.split('.', 1)
+    except ValueError:
+        return getattr(obj, attr)
+
+    return rgetattr(getattr(obj, left), right)
