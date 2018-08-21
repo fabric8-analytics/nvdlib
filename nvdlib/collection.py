@@ -63,12 +63,12 @@ class Collection(object):
         """Returns unique representation of collection."""
         collection_repr = textwrap.dedent("""
         Collection: {{
-           id: {id}
+           _id: {_id}
            name: '{name}'
            adapter: '{adapter}',
            documents: {count}
         }}
-        """).format(id=id(self),
+        """).format(_id=id(self),
                     name=self.name,
                     adapter=self._adapter.name,
                     count=self._count)
@@ -96,3 +96,10 @@ class Collection(object):
 
     def cursor(self):
         return self._adapter.cursor()
+
+    def sample(self, sample_size: int = 20):
+        return self._adapter.sample(sample_size)
+
+    def pretty(self, sample_size: int = 20):
+        for doc in self._adapter.sample(sample_size):
+            doc.pretty()

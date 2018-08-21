@@ -75,6 +75,8 @@ import typing
 from abc import ABC, abstractmethod
 from collections import namedtuple
 
+from prettyprinter import pprint
+
 
 class Entry(ABC):
 
@@ -118,6 +120,9 @@ class Entry(ABC):
     @abstractmethod
     def parse(self, entry: typing.Any):
         """Parse the entry relevant to the current Node class."""
+
+    def pretty(self):
+        return pprint(self.__dict__)
 
 
 class DescriptionEntry(Entry):
@@ -267,6 +272,9 @@ class Configurations(namedtuple('Configurations', [
             ]
         )
 
+    def pretty(self):
+        return pprint(dict(self._asdict()))
+
 
 class Impact(namedtuple('Impact', [
     'severity', 'exploitability_score', 'impact_score', 'cvss'
@@ -349,6 +357,9 @@ class Impact(namedtuple('Impact', [
             cvss=cls.CVSSNode(**cvss_modified)
         )
 
+    def pretty(self):
+        return pprint(dict(self._asdict()))
+
 
 class CVE(namedtuple('CVE', [
     'id_', 'assigner', 'data_version',
@@ -398,14 +409,18 @@ class CVE(namedtuple('CVE', [
             references=references,
             descriptions=descriptions)
 
+    def pretty(self):
+        return pprint(dict(self._asdict()))
+
 
 class Document(namedtuple('Document', [
-    'cve', 'configurations', 'impact', 'published_date', 'modified_date'
+    'id_', 'cve', 'configurations', 'impact', 'published_date', 'modified_date'
 ])):
     """Representation of NVD Feed entry encapsulating other objects."""
 
     # noinspection PyInitNewSignature
     def __new__(cls,
+                id_: typing.Union[str, int] = None,
                 cve: CVE = None,
                 configurations: Configurations = None,
                 impact: Impact = None,
@@ -419,8 +434,12 @@ class Document(namedtuple('Document', [
         published_date: datetime.datetime = None
         modified_date: datetime.datetime = None
 
+        # noinspection PyProtectedMember
+        id_ = id_ or cve.id_ or id(cve)
+
         return super(Document, cls).__new__(
             cls,
+            id_=id_,
             cve=cve,
             configurations=configurations,
             impact=impact,
@@ -448,9 +467,13 @@ class Document(namedtuple('Document', [
         impact = Impact.from_data(data=data['impact'])
 
         return cls(
+            id_=cve.id_,
             cve=cve,
             configurations=configurations,
             impact=impact,
             published_date=published_date,
             modified_date=modified_date
         )
+
+    def pretty(self):
+        return pprint(dict(self._asdict()))

@@ -21,9 +21,8 @@ from collections import OrderedDict
 
 from nvdlib.adapters.base import BaseAdapter, BaseCursor
 from nvdlib.model import Document
+from nvdlib import query_selectors
 from nvdlib import utils
-
-import nvdlib.query_selectors as selectors
 
 
 __LOCKS = set()
@@ -206,10 +205,10 @@ class DefaultAdapter(BaseAdapter):
                 raise ValueError(f"Invalid key: {key}")
 
         for shard in self._shards:
-            yield from self._find(selectors, shard)
+            yield from self.__find(selectors, shard)
 
-    @staticmethod
-    def _find(selector: dict, shard: io.BytesIO):
+    # noinspection PyMethodMayBeStatic
+    def __find(self, selectors: dict, shard: io.BytesIO):
 
         shard.seek(0)
         data = pickle.load(shard)
@@ -217,9 +216,9 @@ class DefaultAdapter(BaseAdapter):
         entry: Document
         for entry in data:
             discard = False
-            for attr, pattern in selector.items():
+            for attr, pattern in selectors.items():
                 if not isinstance(pattern, typing.Callable):
-                    select: typing.Callable = selectors.match(pattern)
+                    select: typing.Callable = query_selectors.match(pattern)
                 else:
                     select: typing.Callable = pattern
 

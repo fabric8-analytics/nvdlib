@@ -1,6 +1,7 @@
 aiofiles
 aiohttp
 cpe
+prettyprinter
 psutil
 requests
 ujson
