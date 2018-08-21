@@ -63,7 +63,7 @@ class BaseAdapter(ABC):
         """Process given data and store in connected storage."""
 
     @abstractmethod
-    def find(self, selectors: typing.Dict[str, typing.Any] = None):
+    def find(self, selectors: typing.Dict[str, typing.Any] = None, limit: int = None):
         """Find documents based on given selectors."""
 
     @abstractmethod

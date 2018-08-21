@@ -84,13 +84,17 @@ class Collection(object):
         return self._adapter.count()
 
     def find(self,
-             selector: typing.Dict[str, typing.Any] = None) -> "Collection":
+             selector: typing.Dict[str, typing.Any] = None,
+             limit: int = None) -> "Collection":
         """Find documents based on given selector."""
 
         if not selector:
             return self
 
-        collection: Collection = Collection(self._adapter.find(selectors=selector))
+        collection: Collection = Collection(self._adapter.find(
+            selectors=selector,
+            limit=limit
+        ))
 
         return collection
 

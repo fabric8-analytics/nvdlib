@@ -52,7 +52,7 @@ class TestDefaultAdapter(unittest.TestCase):
         # small sample, dump will not be called
         self.assertTrue(adapter._data)
         self.assertTrue(adapter._meta)
-        self.assertIn(DOCUMENT.cve.id_, adapter._meta)
+        self.assertIn(DOCUMENT.cve.id_, adapter._cve_meta)
 
         # meta has been created
         self.assertIn('.meta', os.listdir(tmp_storage))
@@ -95,11 +95,8 @@ class TestDefaultAdapter(unittest.TestCase):
         adapter.process(data=[DOCUMENT] * 10)
 
         # invalid key
-        with self.assertRaises(ValueError):
-            _ = list(adapter.find({'wrong-key': 'non-existing'}))
-
-        # flush between runs (not to shard all over again)
-        adapter._flush()
+        # with self.assertRaises(ValueError):
+        #     _ = list(adapter.find({'wrong-key': 'non-existing'}))
 
         # not finding anything
         collection = list(adapter.find({'cve.id_': 'non-existing'}))
@@ -116,6 +113,24 @@ class TestDefaultAdapter(unittest.TestCase):
 
         # special selector
         collection = list(adapter.find({'cve.id_': selectors.match('CVE-2015-0001')}))
+        self.assertEqual(len(collection), 10)
+
+        # ---
+        # array access
+        collection = list(adapter.find({
+            'cve.affects.data.vendor_name': 'microsoft'
+        }))
+        self.assertEqual(len(collection), 10)
+
+        # array access
+        collection = list(adapter.find({
+            'cve.affects.data.product_name': selectors.match('windows')
+        }))
+        self.assertEqual(len(collection), 0)
+
+        collection = list(adapter.find({
+            'cve.affects.data.product_name': selectors.search('windows')
+        }))
         self.assertEqual(len(collection), 10)
 
     def test_cursor(self):

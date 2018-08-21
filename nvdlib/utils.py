@@ -84,8 +84,16 @@ def compute_sha256(fpath):
 
 
 def rhasattr(obj, attr: str):
+    # check for and array
+    if isinstance(obj, list):
+        if not obj:  # empty list
+            return False
+
+        return any(rhasattr(item, attr) for item in obj)
+
     try:
         left, right = attr.split('.', 1)
+
     except ValueError:
         return hasattr(obj, attr)
 
@@ -93,9 +101,16 @@ def rhasattr(obj, attr: str):
 
 
 def rgetattr(obj, attr: str):
+    # check for and array
+    if isinstance(obj, list):
+        if not obj:  # empty list
+            return None
+
+        return [rgetattr(item, attr) for item in obj]
+
     try:
         left, right = attr.split('.', 1)
     except ValueError:
-        return getattr(obj, attr)
+        return getattr(obj, attr, False)
 
     return rgetattr(getattr(obj, left), right)

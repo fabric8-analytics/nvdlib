@@ -209,7 +209,7 @@ class AffectsEntry(Entry):
                                            ]
 
                     affects_data.append(
-                        (product_name, vendor_name, version_data)
+                        (vendor_name, product_name, version_data)
                     )
 
         super(AffectsEntry, self).__init__(*affects_data)
@@ -362,13 +362,14 @@ class Impact(namedtuple('Impact', [
 
 
 class CVE(namedtuple('CVE', [
-    'id_', 'assigner', 'data_version',
+    'id_', 'year', 'assigner', 'data_version',
     'affects', 'references', 'descriptions'
 ])):
     """Representation of NVD CVE object."""
 
     def __new__(cls,
                 id_: str = None,
+                year: typing.Union[str, int] = None,
                 assigner: str = None,
                 data_version: str = None,
                 affects: AffectsEntry = None,
@@ -380,9 +381,12 @@ class CVE(namedtuple('CVE', [
         references: ReferenceEntry = references or ReferenceEntry()
         descriptions: DescriptionEntry = descriptions or DescriptionEntry()
 
+        year = int(year) or int(id_.split(sep='-')[1]) if id_ else None
+
         return super(CVE, cls).__new__(
             cls,
             id_=id_,
+            year=year,
             assigner=assigner,
             data_version=data_version,
             affects=affects,
@@ -401,8 +405,11 @@ class CVE(namedtuple('CVE', [
         references = ReferenceEntry(data['references'])
         descriptions = DescriptionEntry(data['description'])
 
+        year = int(id_.split(sep='-')[1])
+
         return cls(
             id_=id_,
+            year=year,
             assigner=assigner,
             data_version=data_version,
             affects=affects,
@@ -431,8 +438,9 @@ class Document(namedtuple('Document', [
         cve: CVE = cve or CVE()
         configurations: Configurations = configurations or Configurations()
         impact: Impact = impact or Impact()
-        published_date: datetime.datetime = None
-        modified_date: datetime.datetime = None
+
+        published_date: datetime.datetime = published_date or None
+        modified_date: datetime.datetime = modified_date or None
 
         # noinspection PyProtectedMember
         id_ = id_ or cve.id_ or id(cve)

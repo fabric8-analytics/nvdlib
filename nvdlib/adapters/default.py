@@ -22,7 +22,6 @@ from collections import OrderedDict
 from nvdlib.adapters.base import BaseAdapter, BaseCursor
 from nvdlib.model import Document
 from nvdlib import query_selectors
-from nvdlib import utils
 
 
 __LOCKS = set()
@@ -143,10 +142,10 @@ class DefaultAdapter(BaseAdapter):
 
         # batches
         # read meta and set cursor to the beginning for future usage
-        self._meta = ujson.loads(self._meta_fd.read().decode('utf-8') or '{}')
+        self._meta = ujson.loads(self._meta_fd.read().decode('utf-8') or '{}') or self._meta
 
-        self._cve_meta = self._meta.get('cve_data', dict())
-        self._shard_meta = self._meta.get('shard_data', dict())
+        self._cve_meta = self._meta['cve_data']
+        self._shard_meta = self._meta['shard_data']
 
         for value_dict in self._cve_meta.values():
 
@@ -190,19 +189,27 @@ class DefaultAdapter(BaseAdapter):
         """Return number of documents in the collection."""
         return self._count
 
-    def find(self, selectors: typing.Dict[str, typing.Any] = None) -> typing.Iterator[Document]:
+    # TODO: limit number of yielded documents
+    def find(self,
+             selectors: typing.Dict[str, typing.Any] = None,
+             limit: int = None) -> typing.Iterator[Document]:
         """Find documents based on given selectors."""
         if any(self._data):  # for consistency, dump all the data into shards
-            self.dump_shard(flush=False)
+            self.dump_shard()
+
+        if limit is not None:
+            if limit <= 0 or not isinstance(limit, int):
+                raise ValueError(f"`limit` must be integer greater than 0, got: {limit}")
 
         # release locks and close descriptors (pass ownership to threads)
         # release_lock(*self._shards, self._meta_fd)
 
-        schema = Document()
+        # TODO create model schema as AttrDict to check key validity
+        # schema = ModelSchema()
 
-        for key, value in selectors.items():
-            if not utils.rhasattr(schema, key):
-                raise ValueError(f"Invalid key: {key}")
+        # for key, value in selectors.items():
+        #     if not utils.rhasattr(schema, key):
+        #         raise ValueError(f"Invalid key: {key}")
 
         for shard in self._shards:
             yield from self.__find(selectors, shard)
@@ -313,7 +320,11 @@ class DefaultAdapter(BaseAdapter):
         if sample_size <= 0:
             raise ValueError("`sample_size` must be >= 0")
 
-        if len(self._data) >= sample_size and not entire:
+        buffer_size = 0
+        for item in self._data:
+            buffer_size += int(item is not None)
+
+        if buffer_size >= sample_size and not entire:
             # use default method in case enough data are present in the buffer
             sample = super(DefaultAdapter, self).sample(sample_size=sample_size)
 
