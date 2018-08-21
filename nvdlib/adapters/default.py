@@ -47,6 +47,8 @@ def register_lock(*fd):
 
 def release_lock(*fd):
     """Release locks on given file descriptors and close them."""
+    global __LOCKS
+
     locked_fd: io.BytesIO
     for locked_fd in fd:
         if locked_fd is None:  # this can happen with default initialization of an adapter
