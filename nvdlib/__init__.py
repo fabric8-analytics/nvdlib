@@ -20,4 +20,4 @@ def set_logging_level(level):
     logging.getLogger(__name__).setLevel(level)
 
 
-__version__ = 0.4
+__version__ = 0.5
