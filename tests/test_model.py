@@ -188,3 +188,47 @@ class TestDocument(unittest.TestCase):
 
         for attr, type_ in zip(attributes, expected_return_types):
             self.assertIsInstance(getattr(doc, attr), type_)
+
+    def test_project(self):
+        """Test Document `project` method."""
+        doc = model.Document.from_data(DATA)
+
+        projection = doc.project({'impact': 1})
+
+        # test only impact is present
+        self.assertEqual(len(projection.keys()), 1)
+
+        # test deeper levels (according to the model) are present as well
+        self.assertIsInstance(projection, dict)
+        projection_value = projection['impact']
+        self.assertTrue(getattr(projection_value, 'cvss', None))
+
+        # ---
+
+        projection = doc.project({'impact.cvss': 1})
+
+        self.assertEqual(len(projection.keys()), 1)
+
+        self.assertIsInstance(projection, dict)
+        projection_value = projection['impact']['cvss']
+        self.assertTrue(getattr(projection_value, 'base_score', None))
+
+        # ---
+
+        projection = doc.project({'impact.cvss.base_score': 1})
+
+        self.assertIsInstance(projection, dict)
+        projection_value = projection['impact']['cvss']['base_score']
+
+        self.assertEqual(projection_value, 1.9)
+
+        # ---
+        # multiple keys
+
+        projection = doc.project({'cve': 1, 'impact': 1})
+
+        # test only both keys are present
+        self.assertEqual(len(projection.keys()), 2)
+        self.assertTrue(hasattr(projection['cve'], 'id_'))
+        self.assertTrue(hasattr(projection['impact'], 'cvss'))
+

@@ -77,6 +77,8 @@ from collections import namedtuple
 
 from prettyprinter import pprint
 
+from nvdlib import utils
+
 
 class Entry(ABC):
 
@@ -482,6 +484,27 @@ class Document(namedtuple('Document', [
             published_date=published_date,
             modified_date=modified_date
         )
+
+    # noinspection PyMethodMayBeStatic
+    def project(self, p_dict: typing.Dict[str, int]) -> dict:
+        """Project specific document attributes."""
+
+        keys = p_dict.keys()
+
+        # create projection tree
+        projection = dict()
+        for key in keys:
+
+            ptr_dict = projection
+
+            sub_keys = key.split(sep='.')
+            for sub_key in sub_keys[:-1]:
+                ptr_dict[sub_key] = dict()
+                ptr_dict = ptr_dict[sub_key]
+
+            ptr_dict[sub_keys[-1]] = utils.rgetattr(self, key)
+
+        return projection
 
     def pretty(self):
         return pprint(dict(self._asdict()))

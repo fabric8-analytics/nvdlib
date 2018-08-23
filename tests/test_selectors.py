@@ -80,6 +80,66 @@ class TestSelector(unittest.TestCase):
         # incorrect
         self.assertFalse(select(obj_with_array, 'fuzz.bar'))
 
+    def test_greater(self):
+        """Test `gt` and `ge` selector."""
+        obj = utils.AttrDict(
+            **{
+                'foo': {'bar': 5},
+                'time': datetime.now()
+            }
+        )
+        select = selectors.gt(0)
+
+        self.assertTrue(select(obj, 'foo.bar'))
+        self.assertTrue(select(obj, 'time'))
+
+        select = selectors.gt(5)
+        self.assertFalse(select(obj, 'foo.bar'))
+
+        select = selectors.gt(datetime.now())
+
+        self.assertFalse(select(obj, 'time'))
+
+        select = selectors.ge(5)
+        self.assertTrue(select(obj, 'foo.bar'))
+
+    def test_lower(self):
+        """Test `lt` and `le` selector."""
+        obj = utils.AttrDict(
+            **{
+                'foo': {'bar': 5},
+                'time': datetime.now()
+            }
+        )
+        select = selectors.lt(0)
+
+        self.assertFalse(select(obj, 'foo.bar'))
+
+        select = selectors.lt(10)
+        self.assertTrue(select(obj, 'foo.bar'))
+
+        select = selectors.lt(datetime.now())
+
+        self.assertTrue(select(obj, 'time'))
+
+        select = selectors.le(5)
+        self.assertTrue(select(obj, 'foo.bar'))
+
+    def test_in_(self):
+        """Test `in_` selector."""
+        obj = utils.AttrDict(
+            **{
+                'foo': {'bar': 5},
+                'buzz': False,
+            }
+        )
+
+        select = selectors.in_([0, 5, 10, 15])
+        self.assertTrue(select(obj, 'foo.bar'))
+
+        select = selectors.in_([True, False])
+        self.assertTrue(select(obj, 'buzz'))
+
     def test_in_range(self):
         """Test `in_range` selector."""
         obj = utils.AttrDict(
@@ -89,7 +149,8 @@ class TestSelector(unittest.TestCase):
 
         # wrong
         with self.assertRaises(ValueError):
-            _ = selectors.in_range(high=10, low=100)
+            select = selectors.in_range(high=10, low=100)
+            select(obj, 'foo.bar')
 
         select = selectors.in_range(high=10)
         self.assertTrue(select(obj, 'foo.bar'))

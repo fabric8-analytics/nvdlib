@@ -6,6 +6,7 @@ import typing
 import logging
 
 from datetime import datetime
+from functools import wraps
 
 from nvdlib import utils
 
@@ -13,157 +14,160 @@ from nvdlib import utils
 _LOGGER = logging.getLogger(__name__)
 
 
-def match(pattern: typing.Union[str, int], full_match=True, **kwargs) -> typing.Callable:
+def selector(fn: callable) -> typing.Callable:
+    """Wrapper for specific selectors."""
 
-    def _match(obj: object, attr: str):
-        value = utils.rgetattr(obj, attr)
+    @wraps(fn)
+    def _arg_wrapper(*args, **kwargs):
 
-        search_space = [value]
-        if isinstance(value, list):
-            search_space = value
+        @wraps(fn)
+        def _fn_wrapper(obj: object, attr: str):
 
-        found = False
-        for val in search_space:
+            attr_value = utils.rgetattr(obj, attr)
 
-            if val is None:
-                continue
+            search_space = [attr_value]
+            if isinstance(attr_value, list):
+                search_space = attr_value
 
-            # type adaptation only if val is int
-            if isinstance(val, int):
-                val = type(pattern)(val)
+            ret = False
+            for value in search_space:
 
-            if not isinstance(pattern, type(val)):
-                raise TypeError(f"Type mismatch: pattern of type `{type(pattern)}`, value of type `{type(val)}`")
+                if value is None:
+                    continue
 
-            if isinstance(pattern, str):
-                if full_match:
-                    found = re.fullmatch(pattern, val, **kwargs)
-                else:
-                    found = re.match(pattern, val, **kwargs)
-            else:
-                found = pattern == val
+                ret = fn(value=value, *args, **kwargs)
 
-            if found:
-                break
+                if ret:
+                    break
 
-        return found
+            return ret
 
-    return _match
+        return _fn_wrapper
+
+    return _arg_wrapper
 
 
-def search(pattern: typing.Union[str, int], **kwargs) -> typing.Callable:
+@selector
+def match(pattern: typing.Union[str, int],
+          full_match=True,
+          **kwargs):
+    """Compare value to pattern using match."""
+    value = kwargs.pop('value')
 
+    # type adaptation only if val is int or float
+    if isinstance(value, int) or isinstance(value, float):
+        value = type(pattern)(value)
+
+    if not isinstance(pattern, type(value)):
+        raise TypeError(f"Type mismatch: pattern of type `{type(pattern)}`, value of type `{type(value)}`")
+
+    if isinstance(pattern, str):
+        if full_match:
+            found = re.fullmatch(pattern, value, **kwargs)
+        else:
+            found = re.match(pattern, value, **kwargs)
+    else:
+        found = pattern == value
+
+    return bool(found)
+
+
+@selector
+def search(pattern: typing.Union[str, int],
+           **kwargs):
+    """Compare value to pattern using search."""
     if not isinstance(pattern, str):
         raise TypeError(f"Search matching is only possible for string patterns, got: `{type(pattern)}`.")
 
-    def _search(obj: object, attr: str):
-        value = utils.rgetattr(obj, attr)
+    value = kwargs.pop('value')
 
-        search_space = [value]
-        if isinstance(value, list):
-            search_space = value
+    # type adaptation only if value is int
+    if isinstance(value, int):
+        value = type(pattern)(value)
 
-        found = False
-        for val in search_space:
+    if not isinstance(pattern, type(value)):
+        raise TypeError(f"Type mismatch: pattern of type `{type(pattern)}`, value of type `{type(value)}`")
 
-            if val is None:
-                continue
+    found = bool(re.search(pattern, value, **kwargs))
 
-            # type adaptation only if val is int
-            if isinstance(val, int):
-                val = type(pattern)(val)
-
-            if not isinstance(pattern, type(val)):
-                raise TypeError(f"Type mismatch: pattern of type `{type(pattern)}`, value of type `{type(val)}`")
-
-            found = re.search(pattern, val, **kwargs)
-
-            if found:
-                break
-
-        return found
-
-    return _search
+    return found
 
 
-def gt(limit: typing.Union[str, int, float]):
+@selector
+def gt(limit: typing.Union[str, int, float, datetime], **kwargs):
+    """Compare whether given value is greater than given limit."""
+    expected_types = [str, int, float, datetime]
 
-    expected_types = [str, int, float]
     if not any([isinstance(limit, t) for t in expected_types]):
         raise TypeError(f"`limit` expected to be of type {typing.Union[int, float]}, got: `{type(limit)}`")
 
-    def _gt(obj: object, attr: str):
-        value = utils.rgetattr(obj, attr)
+    value = kwargs.pop('value')
 
-        search_space = [value]
-        if isinstance(value, list):
-            search_space = value
-
-        for val in search_space:
-
-            if val is None:
-                continue
-
-            if val.__gt__(limit):
-                return True
-
-        return False
-
-    return _gt
+    return value.__gt__(limit)
 
 
-def lt(limit: typing.Union[str, int, float]):
+@selector
+def ge(limit: typing.Union[str, int, float, datetime], **kwargs):
+    """Compare whether given value is greater or equal than given limit."""
+    expected_types = [str, int, float, datetime]
 
-    expected_types = [str, int, float]
     if not any([isinstance(limit, t) for t in expected_types]):
         raise TypeError(f"`limit` expected to be of type {typing.Union[int, float]}, got: `{type(limit)}`")
 
-    def _lt(obj: object, attr: str):
-        value = utils.rgetattr(obj, attr)
+    value = kwargs.pop('value')
 
-        search_space = [value]
-        if isinstance(value, list):
-            search_space = value
-
-        for val in search_space:
-
-            if val is None:
-                continue
-
-            if val.__lt__(limit):
-                return True
-
-        return False
-
-    return _lt
+    return value.__ge__(limit)
 
 
-def in_range(high: typing.Union[str, int, datetime], low: typing.Union[str, int, datetime] = None):
+@selector
+def lt(limit: typing.Union[str, int, float, datetime], **kwargs):
+    """Compare whether given value is lower than given limit."""
+    expected_types = [str, int, float, datetime]
+    if not any([isinstance(limit, t) for t in expected_types]):
+        raise TypeError(f"`limit` expected to be of type {typing.Union[int, float]}, got: `{type(limit)}`")
 
+    value = kwargs.pop('value')
+
+    return value.__lt__(limit)
+
+
+@selector
+def le(limit: typing.Union[str, int, float, datetime], **kwargs):
+    """Compare whether given value is lower or equal than given limit."""
+    expected_types = [str, int, float, datetime]
+    if not any([isinstance(limit, t) for t in expected_types]):
+        raise TypeError(f"`limit` expected to be of type {typing.Union[int, float]}, got: `{type(limit)}`")
+
+    value = kwargs.pop('value')
+
+    return value.__le__(limit)
+
+
+@selector
+def in_(array: typing.Union[list, set], **kwargs):
+    """Return whether element is present in the array."""
+
+    if not isinstance(array, list) or isinstance(array, set):
+        raise TypeError(f"`array` expected to be list or set, got `{type(array)}`")
+
+    value = kwargs.pop('value')
+
+    return value in array
+
+
+@selector
+def in_range(high: typing.Union[str, int, datetime],
+             low: typing.Union[str, int, datetime] = None,
+             **kwargs):
+    """Return whether value is present within given range."""
     if low and high <= low:
         raise ValueError(f"`high` must be > `low`: {high} <= {low}")
 
-    def _in_range(obj: object, attr: str):
-        value = utils.rgetattr(obj, attr)
+    value = kwargs.pop('value')
 
-        search_space = [value]
-        if isinstance(value, list):
-            search_space = value
+    if low is not None:
+        ret = low <= value < high
+    else:
+        ret = value < high
 
-        res = False
-        for val in search_space:
-
-            if val is None:
-                continue
-
-            if low is not None:
-                res = low <= val < high
-            else:
-                res = val < high
-
-            if res:
-                break
-
-        return res
-
-    return _in_range
+    return ret

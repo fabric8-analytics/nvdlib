@@ -43,6 +43,8 @@ class Collection(object):
 
         self._count = self._adapter.count()
 
+        self._projection_state = 0
+
     @property
     def name(self):
         return self._name

@@ -26,7 +26,9 @@ class AttrDict(Mapping):
         for key, value in entries.items():
             # replace dashes by underscores JIC
             key = key.replace('-', '_')
-            if type(value) is dict:
+            if getattr(value, '_fields', None):
+                self.__dict__[key] = AttrDict(**dict(value._asdict()))
+            elif type(value) is dict:
                 self.__dict__[key] = AttrDict(**value)
             else:
                 self.__dict__[key] = value
