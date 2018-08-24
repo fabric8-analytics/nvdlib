@@ -5,7 +5,6 @@ import typing
 from abc import ABC, abstractmethod
 
 from nvdlib.model import Document
-from nvdlib.selector import Selector
 
 
 class BaseCursor(ABC):
@@ -62,18 +61,6 @@ class BaseAdapter(ABC):
     @abstractmethod
     def process(self, data: typing.Iterable["Document"]):
         """Process given data and store in connected storage."""
-
-    @abstractmethod
-    def select(self, *selectors: Selector, operator: str = 'AND'):
-        """Select documents based on given selector."""
-
-    @abstractmethod
-    def project(self, *selectors: Selector):
-        """Project specific attributes based on given selectors."""
-
-    @abstractmethod
-    def filter(self, fn: callable):
-        """Filter documents based on function call."""
 
     @abstractmethod
     def dump(self, storage: typing.Any = None):
