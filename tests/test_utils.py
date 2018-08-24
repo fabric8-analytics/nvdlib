@@ -6,9 +6,11 @@ for all utils or contain asserts or true unit tests.
 Utils module might be excluded from coverage measures.
 """
 
+import json
 import unittest
 
 from nvdlib import utils
+from nvdlib.model import Document
 
 
 class TestUtils(unittest.TestCase):
@@ -55,3 +57,18 @@ class TestUtils(unittest.TestCase):
         self.assertIsInstance(utils.rgetattr(obj, 'foo'), utils.AttrDict)
         self.assertIsInstance(utils.rgetattr(obj, 'foo.bar'), bool)
         self.assertTrue(utils.rgetattr(obj, 'foo.bar'))
+
+    def test_dictionarize(self):
+        """Test utils dictionarize function."""
+        sample_cve_path = 'data/cve-1.0-sample.json'
+
+        with open(sample_cve_path) as f:
+            data = json.loads(f.read())
+            doc = Document.from_data(data)
+
+        doc_dict = utils.dictionarize(doc)
+
+        self.assertIsInstance(doc_dict, dict)
+        self.assertIsInstance(doc_dict['cve'], dict)
+        self.assertIsInstance(doc_dict['impact'], dict)
+        self.assertIsInstance(doc_dict['configurations'], dict)

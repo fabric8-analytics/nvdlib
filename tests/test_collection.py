@@ -4,6 +4,7 @@ import unittest
 
 from nvdlib import model
 from nvdlib.collection import Collection
+from nvdlib.manager import FeedManager
 
 
 SAMPLE_CVE_PATH = 'data/cve-1.0-sample.json'
@@ -38,12 +39,3 @@ class TestCollection(unittest.TestCase):
 
         # in this case (non-caching mode), collection should also preserve reference to the doc
         self.assertEqual(id(doc), id(document))
-
-    def test_select(self):
-        pass
-
-    def test_project(self):
-        pass
-
-    def test_filter(self):
-        pass

@@ -78,7 +78,8 @@ class TestSelector(unittest.TestCase):
         self.assertTrue(select(obj_with_array, 'fuzz.foo.bar'))
         self.assertTrue(select(obj_with_array, 'fuzz.buzz'))
         # incorrect
-        self.assertFalse(select(obj_with_array, 'fuzz.bar'))
+        with self.assertRaises(AttributeError):
+            select(obj_with_array, 'fuzz.bar')
 
     def test_greater(self):
         """Test `gt` and `ge` selector."""
@@ -108,7 +109,11 @@ class TestSelector(unittest.TestCase):
         obj = utils.AttrDict(
             **{
                 'foo': {'bar': 5},
-                'time': datetime.now()
+                'time': datetime.now(),
+                'arr': [
+                    '1.0.0',
+                    '1.4.3'
+                ]
             }
         )
         select = selectors.lt(0)
@@ -124,6 +129,17 @@ class TestSelector(unittest.TestCase):
 
         select = selectors.le(5)
         self.assertTrue(select(obj, 'foo.bar'))
+
+        # ---
+        # strings
+        select = selectors.le('1.0.0')
+        self.assertTrue(select(obj, 'arr'))
+
+        select = selectors.lt('1.0.0')
+        self.assertFalse(select(obj, 'arr'))
+
+        select = selectors.lt('2.0.0')
+        self.assertTrue(select(obj, 'arr'))
 
     def test_in_(self):
         """Test `in_` selector."""
@@ -152,17 +168,20 @@ class TestSelector(unittest.TestCase):
             select = selectors.in_range(high=10, low=100)
             select(obj, 'foo.bar')
 
-        select = selectors.in_range(high=10)
+        select = selectors.in_range(high=10, low=0)
         self.assertTrue(select(obj, 'foo.bar'))
 
         select = selectors.in_range(high=10, low=5)
         self.assertTrue(select(obj, 'foo.bar'))
 
-        select = selectors.in_range(high=5)
+        select = selectors.in_range(high=5, low=0)
+        self.assertTrue(select(obj, 'foo.bar'))
+
+        select = selectors.in_range(high=4, low=0)
         self.assertFalse(select(obj, 'foo.bar'))
 
-        select = selectors.in_range(high=datetime.now())
+        select = selectors.in_range(high=datetime.now(), low=datetime(1, 1, 1))
         self.assertTrue(select(obj, 'time'))
 
-        select = selectors.in_range(high=datetime(1, 1, 1))
+        select = selectors.in_range(high=datetime(2, 2, 2), low=datetime(1, 1, 1))
         self.assertFalse(select(obj, 'time'))

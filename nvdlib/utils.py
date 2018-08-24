@@ -5,6 +5,7 @@ import operator
 import typing
 
 from collections import Mapping
+from prettyprinter import pprint
 
 # NOTE: Victims does not support ``[<>]`` regex
 SYMBOLS = ['==', '<', '<=', '>=', '>']
@@ -12,6 +13,41 @@ OPERATORS = [
     operator.eq, operator.lt, operator.le, operator.ge, operator.gt,
 ]
 OPERATOR_DICT = dict(zip(SYMBOLS, OPERATORS))
+
+
+def dictionarize(obj) -> dict:
+
+    array_types = [list, set, tuple]
+
+    def _dictionarize(out_dict: dict, **kwargs) -> dict:
+        dct = out_dict or dict()
+
+        for key, value in kwargs.items():
+            # replace dashes by underscores JIC
+            key = key.replace('-', '_')
+            if getattr(value, '_fields', None) or hasattr(value, '_asdict'):
+                dct[key] = _dictionarize({}, **value._asdict())
+            elif isinstance(value, typing.Mapping):
+                dct[key] = _dictionarize({}, **value)
+            elif any([isinstance(value, array) for array in array_types]):
+                dct[key] = dictionarize(value)
+            else:
+                dct[key] = value
+
+        return dct
+
+    if getattr(obj, '_fields', None) or hasattr(obj, '_asdict'):
+        _call = lambda: _dictionarize({}, **obj._asdict())
+    elif isinstance(obj, typing.Mapping):
+        _call = lambda: _dictionarize({}, **obj)
+    elif any([isinstance(obj, array) for array in array_types]):
+        _call = lambda: [
+            dictionarize(item) for item in obj
+        ]
+    else:
+        _call = lambda: obj
+
+    return _call()
 
 
 class AttrDict(Mapping):
@@ -51,6 +87,9 @@ class AttrDict(Mapping):
         Provides dict-style access to attributes
         """
         return getattr(self, key)
+
+    def pretty(self):
+        pprint(dictionarize(self))
 
 
 def get_victims_notation(version_tuple: typing.Sequence):
@@ -113,6 +152,6 @@ def rgetattr(obj, attr: str):
     try:
         left, right = attr.split('.', 1)
     except ValueError:
-        return getattr(obj, attr, False)
+        return getattr(obj, attr)  # TODO: Think about this.. should raise or not?
 
     return rgetattr(getattr(obj, left), right)

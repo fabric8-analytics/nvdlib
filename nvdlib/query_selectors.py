@@ -10,6 +10,7 @@ from functools import wraps
 
 from nvdlib import utils
 
+# TODO: Consider implementing `any`, `all`, `exists`, and `apply` selectors, which would enable more customization
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,7 +36,13 @@ def selector(fn: callable) -> typing.Callable:
                 if value is None:
                     continue
 
-                ret = fn(value=value, *args, **kwargs)
+                if isinstance(value, list):
+                    ret = any([
+                        fn(value=v, *args, **kwargs) for v in value
+                    ])
+
+                else:
+                    ret = fn(value=value, *args, **kwargs)
 
                 if ret:
                     break
@@ -156,18 +163,16 @@ def in_(array: typing.Union[list, set], **kwargs):
 
 
 @selector
-def in_range(high: typing.Union[str, int, datetime],
-             low: typing.Union[str, int, datetime] = None,
+def in_range(low: typing.Union[str, int, datetime],
+             high: typing.Union[str, int, datetime],
              **kwargs):
-    """Return whether value is present within given range."""
+    """Return whether value is present within given range.
+
+    NOTE: Interval boundaries are inclusive.
+    """
     if low and high <= low:
         raise ValueError(f"`high` must be > `low`: {high} <= {low}")
 
     value = kwargs.pop('value')
 
-    if low is not None:
-        ret = low <= value < high
-    else:
-        ret = value < high
-
-    return ret
+    return low <= value <= high

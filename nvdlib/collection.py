@@ -106,6 +106,17 @@ class Collection(object):
     def sample(self, sample_size: int = 20):
         return self._adapter.sample(sample_size)
 
+    # TODO: Create Projection proxy
+    def project(self, projection: typing.Dict[str, int]) -> typing.Iterator:
+        cursor = self.cursor()
+
+        while True:
+            try:
+                yield cursor.next().project(projection)
+            except StopIteration:
+                break
+
     def pretty(self, sample_size: int = 20):
         for doc in self._adapter.sample(sample_size):
             doc.pretty()
+            print()  # newline

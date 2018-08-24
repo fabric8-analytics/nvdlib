@@ -3,8 +3,10 @@
 Model:
 
     nvdlib.model.Document(
+        id_: str,
         cve: nvdlib.model.CVE(
              id_: str,
+             year: int,
              assigner: str,
              data_version: str,
              affects: AffectsEntry(data: List[
@@ -124,7 +126,31 @@ class Entry(ABC):
         """Parse the entry relevant to the current Node class."""
 
     def pretty(self):
-        return pprint(self.__dict__)
+        """Pretty print."""
+        dct = self.__dict__.copy()
+        for key in dct:
+            if key.startswith('_'):
+                dct[key[1:]] = dct.pop(key)
+
+        # pop state argument (not necessary to print)
+        dct.pop('state')
+
+        pprint(utils.dictionarize(dct))
+
+    def _asdict(self):
+        """Return dictionary representation of current state.
+
+        Note: The method creates a deep copy, it is not possible to modify attributes via returned dictionary.
+        """
+        dct = self.__dict__.copy()
+        for key in dct:
+            if key.startswith('_'):
+                dct[key[1:]] = dct.pop(key)
+
+        # pop state argument (not necessary to print)
+        dct.pop('state')
+
+        return dct
 
 
 class DescriptionEntry(Entry):
@@ -275,7 +301,7 @@ class Configurations(namedtuple('Configurations', [
         )
 
     def pretty(self):
-        return pprint(dict(self._asdict()))
+        pprint(utils.dictionarize(self))
 
 
 class Impact(namedtuple('Impact', [
@@ -360,7 +386,7 @@ class Impact(namedtuple('Impact', [
         )
 
     def pretty(self):
-        return pprint(dict(self._asdict()))
+        pprint(utils.dictionarize(self))
 
 
 class CVE(namedtuple('CVE', [
@@ -419,7 +445,7 @@ class CVE(namedtuple('CVE', [
             descriptions=descriptions)
 
     def pretty(self):
-        return pprint(dict(self._asdict()))
+        pprint(utils.dictionarize(self))
 
 
 class Document(namedtuple('Document', [
@@ -486,13 +512,17 @@ class Document(namedtuple('Document', [
         )
 
     # noinspection PyMethodMayBeStatic
-    def project(self, p_dict: typing.Dict[str, int]) -> dict:
+    def project(self, p_dict: typing.Dict[str, int]) -> utils.AttrDict:
         """Project specific document attributes."""
 
         keys = p_dict.keys()
 
         # create projection tree
-        projection = dict()
+        if not p_dict.pop('id_', 1):
+            projection = dict()
+        else:
+            projection = {'id_': self.id_}
+
         for key in keys:
 
             ptr_dict = projection
@@ -504,7 +534,7 @@ class Document(namedtuple('Document', [
 
             ptr_dict[sub_keys[-1]] = utils.rgetattr(self, key)
 
-        return projection
+        return utils.AttrDict(**projection)
 
     def pretty(self):
-        return pprint(dict(self._asdict()))
+        pprint(utils.dictionarize(self))

@@ -302,7 +302,9 @@ class DefaultAdapter(BaseAdapter):
             )
         else:
             cursor = Cursor(
-                data=self._data
+                data=[
+                    item for item in self._data if item is not None
+                ]
             )
 
         return cursor
@@ -431,6 +433,8 @@ class Cursor(BaseCursor):
 
         self._index = 0
         self._data = data
+
+        self._count = 0
 
         self._shards = shards
         self._batch_size = batch_size
