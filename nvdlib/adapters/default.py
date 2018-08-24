@@ -18,7 +18,6 @@ import ujson
 
 from nvdlib.adapters.base import BaseAdapter, BaseCursor
 from nvdlib.model import Document
-from nvdlib.selector import Selector
 
 
 __LOCKS = set()
@@ -161,18 +160,6 @@ class DefaultAdapter(BaseAdapter):
     def count(self) -> int:
         """Return number of entries in the collection."""
         return self._count
-
-    def select(self, *selectors: Selector, operator: str = 'AND'):
-        """Select documents based on given selector."""
-        raise NotImplementedError
-
-    def project(self, *selectors: Selector):
-        """Project specific attributes based on given selectors."""
-        raise NotImplementedError
-
-    def filter(self, fn: callable):
-        """Filter documents based on function call."""
-        raise NotImplementedError
 
     def dump(self, storage: typing.Any = None):
         """Dump stored data into a storage."""

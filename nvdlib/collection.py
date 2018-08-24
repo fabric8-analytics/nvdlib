@@ -9,7 +9,6 @@ import textwrap
 
 from nvdlib import adapters
 from nvdlib.model import Document
-from nvdlib.selector import Selector
 
 
 class Collection(object):
@@ -88,17 +87,6 @@ class Collection(object):
 
     def count(self):
         return self._adapter.count()
-
-    def select(self, *selectors: Selector, operator='AND') -> "Collection":
-        collection = self._adapter.select(*selectors, operator=operator)
-
-        return collection
-
-    def project(self, *selectors: Selector):
-        raise NotImplementedError
-
-    def filter(self, fn: callable):
-        raise NotImplementedError
 
     def cursor(self):
         return self._adapter.cursor()
