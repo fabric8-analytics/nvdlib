@@ -3,5 +3,4 @@ aiohttp
 cpe
 psutil
 requests
-tornado==4.5.3
 ujson
