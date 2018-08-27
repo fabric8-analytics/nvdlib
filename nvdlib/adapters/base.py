@@ -79,9 +79,6 @@ class BaseAdapter(ABC):
             - batch_size()
         """
 
-    def is_connected(self):
-        return self._storage is not None
-
     def sample(self, sample_size: int = 20):
         """Draw random sample."""
         return random.choices(self._data, k=sample_size)
