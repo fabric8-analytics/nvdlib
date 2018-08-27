@@ -154,7 +154,7 @@ def le(limit: typing.Union[str, int, float, datetime], **kwargs):
 def in_(array: typing.Union[list, set], **kwargs):
     """Return whether element is present in the array."""
 
-    if not isinstance(array, list) or isinstance(array, set):
+    if not isinstance(array, list) and not isinstance(array, set):
         raise TypeError(f"`array` expected to be list or set, got `{type(array)}`")
 
     value = kwargs.pop('value')
