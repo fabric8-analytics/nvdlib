@@ -174,7 +174,7 @@ sample.pretty()
 
 <br>
 
-2. Querying by pattern matches¶
+2. Querying by pattern matches
 
 ```python
 win_collection = collection.find({'cve.affects.data.product_name': search('windows')})
@@ -232,3 +232,11 @@ pre_release_december_collection
 sample = pre_release_december_collection.pretty(sample_size=1)
 sample.pretty()
 ```
+
+<br>
+<br>
+
+> Author: Marek Cermak <macermak@redhat.com>
+\
+Collaborators: Michal Srb <msrb@redhat.com>
+
