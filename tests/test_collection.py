@@ -4,7 +4,6 @@ import unittest
 
 from nvdlib import model
 from nvdlib.collection import Collection
-from nvdlib.manager import FeedManager
 
 
 SAMPLE_CVE_PATH = 'data/cve-1.0-sample.json'
