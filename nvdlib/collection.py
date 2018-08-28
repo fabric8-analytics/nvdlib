@@ -117,6 +117,11 @@ class Collection(object):
                 break
 
     def pretty(self, sample_size: int = 20):
+        collection_size = self._adapter.count()
+
+        if sample_size > collection_size:
+            sample_size = collection_size
+
         for doc in self._adapter.sample(sample_size):
             doc.pretty()
             print()  # newline
