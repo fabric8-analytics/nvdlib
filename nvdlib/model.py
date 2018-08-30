@@ -514,7 +514,6 @@ class Document(namedtuple('Document', [
     # noinspection PyMethodMayBeStatic
     def project(self, p_dict: typing.Dict[str, int]) -> utils.AttrDict:
         """Project specific document attributes."""
-
         keys = p_dict.keys()
 
         # create projection tree

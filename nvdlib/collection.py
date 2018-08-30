@@ -43,13 +43,16 @@ class Collection(object):
 
         self._count = self._adapter.count()
 
+        self._cursor = None
         self._projection_state = 0
 
     @property
     def name(self):
+        """Get collection name."""
         return self._name
 
     def set_name(self, name: str):
+        """Set collection name."""
         self._name = name
 
     def __del__(self):
@@ -57,12 +60,25 @@ class Collection(object):
         if self._clear_storage:
             shutil.rmtree(self._storage)
 
+    def __iter__(self):
+        """Iterate over collection."""
+        self._cursor = self.cursor()
+
+        return self
+
+    def __next__(self):
+        """Return next element from collection."""
+        if self._cursor is None:
+            raise StopIteration("Iterator has not been initialized. Use `iter` first.")
+
+        return self._cursor.next()
+
     def __len__(self):
-        """Returns number of documents stored in this collection."""
+        """Return number of documents stored in this collection."""
         return self._count
 
     def __repr__(self):
-        """Returns unique representation of collection."""
+        """Return unique representation of collection."""
         collection_repr = textwrap.dedent("""
         Collection: {{
            _id: {_id}
@@ -89,7 +105,6 @@ class Collection(object):
              selector: typing.Dict[str, typing.Any] = None,
              limit: int = None) -> "Collection":
         """Find documents based on given selector."""
-
         if not selector:
             return self
 
@@ -101,13 +116,16 @@ class Collection(object):
         return collection
 
     def cursor(self):
+        """Initialize cursor to the beginning of a collection."""
         return self._adapter.cursor()
 
     def sample(self, sample_size: int = 20):
+        """Draw random sample of given size."""
         return self._adapter.sample(sample_size)
 
     # TODO: Create Projection proxy
     def project(self, projection: typing.Dict[str, int]) -> typing.Iterator:
+        """Yield projected document attributes."""
         cursor = self.cursor()
 
         while True:
@@ -117,6 +135,7 @@ class Collection(object):
                 break
 
     def pretty(self, sample_size: int = 20):
+        """Pretty print sample of documents."""
         collection_size = self._adapter.count()
 
         if sample_size > collection_size:
