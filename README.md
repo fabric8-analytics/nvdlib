@@ -233,10 +233,17 @@ sample = pre_release_december_collection.pretty(sample_size=1)
 sample.pretty()
 ```
 
+
+<br>
+
+# Notes & Issues:
+
+- In order to use [nvdlib](https://github.com/fabric8-analytics/nvdlib) in Jupyter Notebook, `tornado==4.3.0` has to be used in order for `asyncio` to run properly. This is *not* an issue on the side of nvdlib and it is being work on (see https://github.com/jupyter/notebook/issues/3397). As this issue appears specificaly in Jupyter Notebook, and `tornado` is an indirect requirement, we suggest to create virtual environment with this `tornado` version for this purpose..
+
+
 <br>
 <br>
 
 > Author: Marek Cermak <macermak@redhat.com>
 \
 Collaborators: Michal Srb <msrb@redhat.com>
-
