@@ -15,4 +15,4 @@ __collaborators__ = "Michal Srb <msrb@redhat.com>"
 
 __license__ = "MIT"
 
-__version__ = 0.6
+__version__ = 0.7
