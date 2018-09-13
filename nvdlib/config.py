@@ -12,3 +12,6 @@ ADAPTER = os.environ.get('ADAPTER', 'DEFAULT')
 
 # download
 FEED_DOWNLOAD_TIMEOUT = 300  # seconds
+
+# query selectors
+TYPE_CHECK_LEVEL = 1  # [0, 1, 2], 0: skip, 1: logger warning, 2: strictly raise TypeError on type mismatch
