@@ -10,6 +10,7 @@ from functools import wraps
 
 from nvdlib import utils
 
+# TODO: Implement `or_` and `and_` selector operators
 # TODO: Consider implementing `any`, `all`, `exists`, and `apply` selectors, which would enable more customization
 
 _LOGGER = logging.getLogger(__name__)
@@ -106,7 +107,7 @@ def gt(limit: typing.Union[str, int, float, datetime], **kwargs):
     expected_types = [str, int, float, datetime]
 
     if not any([isinstance(limit, t) for t in expected_types]):
-        raise TypeError(f"`limit` expected to be of type {typing.Union[int, float]}, got: `{type(limit)}`")
+        raise TypeError(f"`limit` expected to be any of {expected_types}, got: `{type(limit)}`")
 
     value = kwargs.pop('value')
 
@@ -119,7 +120,7 @@ def ge(limit: typing.Union[str, int, float, datetime], **kwargs):
     expected_types = [str, int, float, datetime]
 
     if not any([isinstance(limit, t) for t in expected_types]):
-        raise TypeError(f"`limit` expected to be of type {typing.Union[int, float]}, got: `{type(limit)}`")
+        raise TypeError(f"`limit` expected to be any of {expected_types}, got: `{type(limit)}`")
 
     value = kwargs.pop('value')
 
@@ -130,8 +131,9 @@ def ge(limit: typing.Union[str, int, float, datetime], **kwargs):
 def lt(limit: typing.Union[str, int, float, datetime], **kwargs):
     """Compare whether given value is lower than given limit."""
     expected_types = [str, int, float, datetime]
+
     if not any([isinstance(limit, t) for t in expected_types]):
-        raise TypeError(f"`limit` expected to be of type {typing.Union[int, float]}, got: `{type(limit)}`")
+        raise TypeError(f"`limit` expected to be any of {expected_types}, got: `{type(limit)}`")
 
     value = kwargs.pop('value')
 
@@ -142,8 +144,9 @@ def lt(limit: typing.Union[str, int, float, datetime], **kwargs):
 def le(limit: typing.Union[str, int, float, datetime], **kwargs):
     """Compare whether given value is lower or equal than given limit."""
     expected_types = [str, int, float, datetime]
+
     if not any([isinstance(limit, t) for t in expected_types]):
-        raise TypeError(f"`limit` expected to be of type {typing.Union[int, float]}, got: `{type(limit)}`")
+        raise TypeError(f"`limit` expected to be any of {expected_types}, got: `{type(limit)}`")
 
     value = kwargs.pop('value')
 
@@ -153,7 +156,6 @@ def le(limit: typing.Union[str, int, float, datetime], **kwargs):
 @selector
 def in_(array: typing.Union[list, set], **kwargs):
     """Return whether element is present in the array."""
-
     if not isinstance(array, list) and not isinstance(array, set):
         raise TypeError(f"`array` expected to be list or set, got `{type(array)}`")
 
@@ -163,13 +165,21 @@ def in_(array: typing.Union[list, set], **kwargs):
 
 
 @selector
-def in_range(low: typing.Union[str, int, datetime],
-             high: typing.Union[str, int, datetime],
+def in_range(low: typing.Union[str, int, float, datetime],
+             high: typing.Union[str, int, float, datetime],
              **kwargs):
     """Return whether value is present within given range.
 
     NOTE: Interval boundaries are inclusive.
     """
+    expected_types = [str, int, float, datetime]
+
+    if not any([isinstance(low, t) for t in expected_types]):
+        raise TypeError(f"`low` expected to be any of {expected_types}, got: `{type(limit)}`")
+
+    if not any([isinstance(high, t) for t in expected_types]):
+        raise TypeError(f"`high` expected to be any of {expected_types}, got: `{type(limit)}`")
+
     if low and high <= low:
         raise ValueError(f"`high` must be > `low`: {high} <= {low}")
 
