@@ -9,6 +9,8 @@ import unittest
 from nvdlib.adapters import DefaultAdapter
 from nvdlib.model import Document
 
+import nvdlib.query_selectors as selectors
+
 
 SAMPLE_CVE_PATH = 'data/cve-1.0-sample.json'
 
@@ -50,7 +52,7 @@ class TestDefaultAdapter(unittest.TestCase):
         # small sample, dump will not be called
         self.assertTrue(adapter._data)
         self.assertTrue(adapter._meta)
-        self.assertIn(DOCUMENT.cve.id_, adapter._meta)
+        self.assertIn(DOCUMENT.cve.id_, adapter._cve_meta)
 
         # meta has been created
         self.assertIn('.meta', os.listdir(tmp_storage))
@@ -83,14 +85,53 @@ class TestDefaultAdapter(unittest.TestCase):
 
         self.assertEqual(len(os.listdir(tmp_storage)), 6)
 
-    def test_select(self):
-        """Test DefaultAdapters `select` method."""
+    def test_find(self):
+        """Test DefaultAdapters `find` method."""
+        tmp_storage = tempfile.mkdtemp(prefix='tests_', suffix='_adapters')
 
-    def test_project(self):
-        """Test DefaultAdapters `project` method."""
+        adapter = DefaultAdapter(storage=tmp_storage)
 
-    def test_filter(self):
-        """Test DefaultAdapters `filter` method."""
+        adapter.connect()
+        adapter.process(data=[DOCUMENT] * 10)
+
+        # invalid key
+        # with self.assertRaises(ValueError):
+        #     _ = list(adapter.find({'wrong-key': 'non-existing'}))
+
+        # not finding anything
+        collection = list(adapter.find({'cve.id_': 'non-existing'}))
+        self.assertEqual(len(collection), 0)
+
+        # find specific id
+        collection = list(adapter.find({'cve.id_': 'CVE-2015-0001'}))
+        self.assertEqual(len(collection), 10)
+
+        # multiple selectors
+        collection = list(adapter.find({'cve.id_': 'CVE-2015-0001',
+                                        'impact.impact_score': 2.9}))
+        self.assertEqual(len(collection), 10)
+
+        # special selector
+        collection = list(adapter.find({'cve.id_': selectors.match('CVE-2015-0001')}))
+        self.assertEqual(len(collection), 10)
+
+        # ---
+        # array access
+        collection = list(adapter.find({
+            'cve.affects.data.vendor_name': 'microsoft'
+        }))
+        self.assertEqual(len(collection), 10)
+
+        # array access
+        collection = list(adapter.find({
+            'cve.affects.data.product_name': selectors.match('windows')
+        }))
+        self.assertEqual(len(collection), 0)
+
+        collection = list(adapter.find({
+            'cve.affects.data.product_name': selectors.search('windows')
+        }))
+        self.assertEqual(len(collection), 10)
 
     def test_cursor(self):
         """Test DefaultAdapters `cursor` method."""
@@ -138,6 +179,32 @@ class TestDefaultAdapter(unittest.TestCase):
 
         self.assertTrue(all(batch))
         self.assertEqual(len(batch), 5)
+
+    def test_sample(self):
+        """Test DefaultAdapters `sample` method."""
+        tmp_storage = tempfile.mkdtemp(prefix='tests_', suffix='_adapters')
+
+        adapter = DefaultAdapter(storage=tmp_storage, shard_size=2)  # dump every other entry
+        adapter.connect()
+        adapter.process(data=[DOCUMENT] * 15)  # should create 5 shards + 1 meta file
+
+        # small sample size -- draw from buffer
+        self.assertGreater(len(adapter._data), 0)
+
+        sample = adapter.sample(sample_size=1)
+        self.assertEqual(len(sample), 1)
+        self.assertIsInstance(sample[0], Document)
+
+        # ---
+        # bigger sample size
+        sample = adapter.sample(sample_size=5)
+        self.assertEqual(len(sample), 5)
+        self.assertTrue(all([isinstance(s, Document) for s in sample]))
+
+        # ---
+        # too big
+        with self.assertRaises(ValueError):
+            _ = adapter.sample(sample_size=20)
 
     def test__encode(self):
         """Test DefaultAdapters `_encode` method."""

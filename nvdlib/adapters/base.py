@@ -63,12 +63,16 @@ class BaseAdapter(ABC):
         """Process given data and store in connected storage."""
 
     @abstractmethod
+    def find(self, selectors: typing.Dict[str, typing.Any] = None, limit: int = None):
+        """Find documents based on given selectors."""
+
+    @abstractmethod
     def dump(self, storage: typing.Any = None):
         """Dump stored data into a storage."""
 
     @abstractmethod
     def count(self) -> int:
-        """Return number of entries in the collection."""
+        """Return number of documents in the collection."""
 
     @abstractmethod
     def cursor(self) -> BaseCursor:
@@ -81,5 +85,8 @@ class BaseAdapter(ABC):
 
     def sample(self, sample_size: int = 20):
         """Draw random sample."""
-        return random.choices(self._data, k=sample_size)
+        return random.choices(
+            [item for item in self._data if item is not None],
+            k=sample_size
+        )
 

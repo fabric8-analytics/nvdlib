@@ -1,6 +1,7 @@
-from nvdlib import config
-
 import logging
+
+from nvdlib import config
+from nvdlib.__about__ import __version__
 
 
 logger = logging.getLogger(name=__name__)
@@ -18,6 +19,3 @@ logger.info("Logging has been set up.")
 
 def set_logging_level(level):
     logging.getLogger(__name__).setLevel(level)
-
-
-__version__ = 0.4

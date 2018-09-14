@@ -3,8 +3,10 @@
 Model:
 
     nvdlib.model.Document(
+        id_: str,
         cve: nvdlib.model.CVE(
              id_: str,
+             year: int,
              assigner: str,
              data_version: str,
              affects: AffectsEntry(data: List[
@@ -75,6 +77,10 @@ import typing
 from abc import ABC, abstractmethod
 from collections import namedtuple
 
+from prettyprinter import pprint
+
+from nvdlib import utils
+
 
 class Entry(ABC):
 
@@ -119,6 +125,33 @@ class Entry(ABC):
     def parse(self, entry: typing.Any):
         """Parse the entry relevant to the current Node class."""
 
+    def pretty(self):
+        """Pretty print."""
+        dct = self.__dict__.copy()
+        for key in dct:
+            if key.startswith('_'):
+                dct[key[1:]] = dct.pop(key)
+
+        # pop state argument (not necessary to print)
+        dct.pop('state')
+
+        pprint(utils.dictionarize(dct))
+
+    def _asdict(self):
+        """Return dictionary representation of current state.
+
+        Note: The method creates a deep copy, it is not possible to modify attributes via returned dictionary.
+        """
+        dct = self.__dict__.copy()
+        for key in dct:
+            if key.startswith('_'):
+                dct[key[1:]] = dct.pop(key)
+
+        # pop state argument (not necessary to print)
+        dct.pop('state')
+
+        return dct
+
 
 class DescriptionEntry(Entry):
 
@@ -132,8 +165,11 @@ class DescriptionEntry(Entry):
                 value=value
             )
 
-    def __init__(self, data: dict):
-        description_data = data['description_data']
+    def __init__(self, data: dict = None):
+        description_data = list()
+
+        if data is not None:
+            description_data = data['description_data']
 
         super(DescriptionEntry, self).__init__(*description_data)
 
@@ -154,8 +190,11 @@ class ReferenceEntry(Entry):
                 refsource=refsource
             )
 
-    def __init__(self, data: dict):
-        reference_data = data['reference_data']
+    def __init__(self, data: dict = None):
+        reference_data = list()
+
+        if data is not None:
+            reference_data = data['reference_data']
 
         super(ReferenceEntry, self).__init__(*reference_data)
 
@@ -180,25 +219,26 @@ class AffectsEntry(Entry):
                 versions=versions
             )
 
-    def __init__(self, data: dict):
-        vendor_data = data['vendor']['vendor_data']
-
+    def __init__(self, data: dict = None):
         affects_data = list()
 
-        for vendor in vendor_data:
-            vendor_name = vendor['vendor_name']
-            product_data = vendor['product']['product_data']
+        if data is not None:
+            vendor_data = data['vendor']['vendor_data']
 
-            for product in product_data:
-                product_name = product['product_name']
-                version_data = [
-                    v['version_value']
-                    for v in product['version']['version_data']
-                ]
+            for vendor in vendor_data:
+                vendor_name = vendor['vendor_name']
+                product_data = vendor['product']['product_data']
 
-                affects_data.append(
-                    (product_name, vendor_name, version_data)
-                )
+                for product in product_data:
+                    product_name = product['product_name']
+                    version_data = [
+                                        v['version_value']
+                                        for v in product['version']['version_data']
+                                           ]
+
+                    affects_data.append(
+                        (vendor_name, product_name, version_data)
+                    )
 
         super(AffectsEntry, self).__init__(*affects_data)
 
@@ -260,6 +300,9 @@ class Configurations(namedtuple('Configurations', [
             ]
         )
 
+    def pretty(self):
+        pprint(utils.dictionarize(self))
+
 
 class Impact(namedtuple('Impact', [
     'severity', 'exploitability_score', 'impact_score', 'cvss'
@@ -301,6 +344,9 @@ class Impact(namedtuple('Impact', [
                 impact_score: float = None,
                 cvss: CVSSNode = None,
                 **kwarsg):
+
+        cvss: Impact.CVSSNode = cvss or Impact.CVSSNode()
+
         return super(Impact, cls).__new__(
             cls,
             severity=severity,
@@ -339,15 +385,19 @@ class Impact(namedtuple('Impact', [
             cvss=cls.CVSSNode(**cvss_modified)
         )
 
+    def pretty(self):
+        pprint(utils.dictionarize(self))
+
 
 class CVE(namedtuple('CVE', [
-    'id_', 'assigner', 'data_version',
+    'id_', 'year', 'assigner', 'data_version',
     'affects', 'references', 'descriptions'
 ])):
     """Representation of NVD CVE object."""
 
     def __new__(cls,
                 id_: str = None,
+                year: typing.Union[str, int] = None,
                 assigner: str = None,
                 data_version: str = None,
                 affects: AffectsEntry = None,
@@ -355,9 +405,16 @@ class CVE(namedtuple('CVE', [
                 descriptions: DescriptionEntry = None,
                 **kwargs):
 
+        affects: AffectsEntry = affects or AffectsEntry()
+        references: ReferenceEntry = references or ReferenceEntry()
+        descriptions: DescriptionEntry = descriptions or DescriptionEntry()
+
+        year = int(year) or int(id_.split(sep='-')[1]) if id_ else None
+
         return super(CVE, cls).__new__(
             cls,
             id_=id_,
+            year=year,
             assigner=assigner,
             data_version=data_version,
             affects=affects,
@@ -376,22 +433,29 @@ class CVE(namedtuple('CVE', [
         references = ReferenceEntry(data['references'])
         descriptions = DescriptionEntry(data['description'])
 
+        year = int(id_.split(sep='-')[1])
+
         return cls(
             id_=id_,
+            year=year,
             assigner=assigner,
             data_version=data_version,
             affects=affects,
             references=references,
             descriptions=descriptions)
 
+    def pretty(self):
+        pprint(utils.dictionarize(self))
+
 
 class Document(namedtuple('Document', [
-    'cve', 'configurations', 'impact', 'published_date', 'modified_date'
+    'id_', 'cve', 'configurations', 'impact', 'published_date', 'modified_date'
 ])):
     """Representation of NVD Feed entry encapsulating other objects."""
 
     # noinspection PyInitNewSignature
     def __new__(cls,
+                id_: typing.Union[str, int] = None,
                 cve: CVE = None,
                 configurations: Configurations = None,
                 impact: Impact = None,
@@ -399,8 +463,19 @@ class Document(namedtuple('Document', [
                 modified_date: datetime.datetime = None,
                 **kwargs):
 
+        cve: CVE = cve or CVE()
+        configurations: Configurations = configurations or Configurations()
+        impact: Impact = impact or Impact()
+
+        published_date: datetime.datetime = published_date or None
+        modified_date: datetime.datetime = modified_date or None
+
+        # noinspection PyProtectedMember
+        id_ = id_ or cve.id_ or id(cve)
+
         return super(Document, cls).__new__(
             cls,
+            id_=id_,
             cve=cve,
             configurations=configurations,
             impact=impact,
@@ -428,9 +503,37 @@ class Document(namedtuple('Document', [
         impact = Impact.from_data(data=data['impact'])
 
         return cls(
+            id_=cve.id_,
             cve=cve,
             configurations=configurations,
             impact=impact,
             published_date=published_date,
             modified_date=modified_date
         )
+
+    # noinspection PyMethodMayBeStatic
+    def project(self, p_dict: typing.Dict[str, int]) -> utils.AttrDict:
+        """Project specific document attributes."""
+        keys = p_dict.keys()
+
+        # create projection tree
+        if not p_dict.pop('id_', 1):
+            projection = dict()
+        else:
+            projection = {'id_': self.id_}
+
+        for key in keys:
+
+            ptr_dict = projection
+
+            sub_keys = key.split(sep='.')
+            for sub_key in sub_keys[:-1]:
+                ptr_dict[sub_key] = dict()
+                ptr_dict = ptr_dict[sub_key]
+
+            ptr_dict[sub_keys[-1]] = utils.rgetattr(self, key)
+
+        return utils.AttrDict(**projection)
+
+    def pretty(self):
+        pprint(utils.dictionarize(self))

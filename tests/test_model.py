@@ -5,6 +5,7 @@ import json
 import unittest
 
 from nvdlib import model
+from nvdlib.utils import AttrDict
 
 
 SAMPLE_CVE_PATH = 'data/cve-1.0-sample.json'
@@ -188,3 +189,46 @@ class TestDocument(unittest.TestCase):
 
         for attr, type_ in zip(attributes, expected_return_types):
             self.assertIsInstance(getattr(doc, attr), type_)
+
+    def test_project(self):
+        """Test Document `project` method."""
+        doc = model.Document.from_data(DATA)
+
+        projection = doc.project({'impact': 1})
+
+        # test only impact and id_ is present
+        self.assertEqual(len(projection.keys()), 2)
+
+        # test deeper levels (according to the model) are present as well
+        self.assertIsInstance(projection, AttrDict)
+        projection_value = projection['impact']
+        self.assertTrue(getattr(projection_value, 'cvss', None))
+
+        # ---
+
+        projection = doc.project({'impact.cvss': 1})
+
+        self.assertEqual(len(projection.keys()), 2)
+
+        self.assertIsInstance(projection, AttrDict)
+        projection_value = projection['impact']['cvss']
+        self.assertTrue(getattr(projection_value, 'base_score', None))
+
+        # ---
+
+        projection = doc.project({'impact.cvss.base_score': 1})
+
+        self.assertIsInstance(projection, AttrDict)
+        projection_value = projection['impact']['cvss']['base_score']
+
+        self.assertEqual(projection_value, 1.9)
+
+        # ---
+        # multiple keys
+
+        projection = doc.project({'id_': 0, 'cve': 1, 'impact': 1})
+
+        # test only both keys are present
+        self.assertEqual(len(projection.keys()), 2)
+        self.assertTrue(hasattr(projection['cve'], 'id_'))
+        self.assertTrue(hasattr(projection['impact'], 'cvss'))

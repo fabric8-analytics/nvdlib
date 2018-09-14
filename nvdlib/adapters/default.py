@@ -11,43 +11,62 @@ import datetime
 import time
 
 import itertools
+import random
 import typing
 
 import pickle
 import ujson
 
+from collections import OrderedDict
+
 from nvdlib.adapters.base import BaseAdapter, BaseCursor
 from nvdlib.model import Document
+from nvdlib import query_selectors
 
 
 __LOCKS = set()
-__DUMP_PATTERN = r"(?<hexmask>0[xX][0-9a-fA-F]+)(?<identifier>\d+)(?<timestamp>(\d+).(\d+))"
+
+_CVE_ID_PATTERN = r"CVE-(20[0-9]{2})-([0-9]+)"
+_DUMP_PATTERN = r"(?<identifier>\d+)(?<hexmask>0[xX][0-9a-fA-F]+)(?<size>[0-9]+)(?<timestamp>(\d+).(\d+))"
 
 
 def register_lock(*fd):
     """Register and lock given file descriptors."""
     global __LOCKS
 
+    tolock_fd: io.BytesIO
     for tolock_fd in fd:
         if tolock_fd is None:  # this can happen with default initialization of an adapter
             continue
+
         fcntl.flock(tolock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
-    __LOCKS.add(fd)
+        # add lock to global handle
+        __LOCKS.add(fd)
 
 
 def release_lock(*fd):
     """Release locks on given file descriptors and close them."""
+    global __LOCKS
+
+    locked_fd: io.BytesIO
     for locked_fd in fd:
         if locked_fd is None:  # this can happen with default initialization of an adapter
             continue
-        fcntl.flock(locked_fd, fcntl.LOCK_UN)
 
+        fcntl.flock(locked_fd, fcntl.LOCK_UN)
         # wait for lock to be released
         time.sleep(0.1)
 
-        # flush the buffer and close the descriptor
-        locked_fd.close()
+        if not locked_fd.closed:
+            # flush the buffer and close the descriptor
+            locked_fd.close()
+
+        try:
+            # remove lock from global handle
+            __LOCKS.remove(fd)
+        except KeyError:
+            pass
 
 
 atexit.register(release_lock, *__LOCKS)
@@ -70,11 +89,19 @@ class DefaultAdapter(BaseAdapter):
         self._shard_size = shard_size or self.__SHARD_SIZE
 
         self._data: typing.List[Document] = [None] * self._shard_size
-        self._meta: typing.Dict[str, dict] = dict()
+
+        self._meta: typing.Dict[str, dict] = {
+            'cve_data': OrderedDict(),
+            'shard_data': OrderedDict()
+        }
+        self._cve_meta = self._meta['cve_data']
+        self._shard_meta = self._meta['shard_data']
 
         self._meta_fpath = None
         self._meta_fd = None
-        self._shards = set()  # set of file descriptors
+        self._shards = list()  # set of file descriptors
+
+        self._schema: dict = None
 
     def __del__(self):
         """Finalize object destruction."""
@@ -117,9 +144,12 @@ class DefaultAdapter(BaseAdapter):
 
         # batches
         # read meta and set cursor to the beginning for future usage
-        self._meta = ujson.loads(self._meta_fd.read().decode('utf-8') or '{}')
+        self._meta = ujson.loads(self._meta_fd.read().decode('utf-8') or '{}') or self._meta
 
-        for value_dict in self._meta.values():
+        self._cve_meta = self._meta['cve_data']
+        self._shard_meta = self._meta['shard_data']
+
+        for value_dict in self._cve_meta.values():
 
             batch_file = value_dict['batch']
             batch_fpath = os.path.join(self._storage, batch_file)
@@ -127,7 +157,7 @@ class DefaultAdapter(BaseAdapter):
 
             register_lock(batch_fd)
 
-            self._shards.add(batch_fd)
+            self._shards.append(batch_fd)
 
         return self
 
@@ -144,13 +174,13 @@ class DefaultAdapter(BaseAdapter):
             document_id: str = document.cve.id_
 
             # store meta pointer to current batch and position
-            self._meta[document_id] = {'index': index}
+            self._cve_meta[document_id] = {'index': index, 'shard': None}
             self._data[index] = document
 
             count += 1
 
             index = count % self._shard_size
-            if count and index == 0:
+            if index == 0:
                 self.dump_shard()
 
         self._count = count
@@ -158,46 +188,100 @@ class DefaultAdapter(BaseAdapter):
         return self
 
     def count(self) -> int:
-        """Return number of entries in the collection."""
+        """Return number of documents in the collection."""
         return self._count
+
+    # TODO: limit number of yielded documents
+    def find(self,
+             selectors: typing.Dict[str, typing.Any] = None,
+             limit: int = None) -> typing.Iterator[Document]:
+        """Find documents based on given selectors."""
+        if any(self._data):  # for consistency, dump all the data into shards
+            self.dump_shard()
+
+        if limit is not None:
+            if limit <= 0 or not isinstance(limit, int):
+                raise ValueError(f"`limit` must be integer greater than 0, got: {limit}")
+
+        # release locks and close descriptors (pass ownership to threads)
+        # release_lock(*self._shards, self._meta_fd)
+
+        # TODO create model schema as AttrDict to check key validity
+        # schema = ModelSchema()
+
+        # for key, value in selectors.items():
+        #     if not utils.rhasattr(schema, key):
+        #         raise ValueError(f"Invalid key: {key}")
+
+        for shard in self._shards:
+            yield from self.__find(selectors, shard)
+
+    # noinspection PyMethodMayBeStatic
+    def __find(self, selectors: dict, shard: io.BytesIO):
+
+        shard.seek(0)
+        data = pickle.load(shard)
+
+        entry: Document
+        for entry in data:
+            discard = False
+            for attr, pattern in selectors.items():
+                if not isinstance(pattern, typing.Callable):
+                    select: typing.Callable = query_selectors.match(pattern)
+                else:
+                    select: typing.Callable = pattern
+
+                if not select(entry, attr):
+                    discard = True
+                    break
+
+            if not discard:
+                yield entry
 
     def dump(self, storage: typing.Any = None):
         """Dump stored data into a storage."""
         raise NotImplementedError
 
-    def dump_shard(self):
+    def dump_shard(self, flush=True):
         """Store data as shards."""
         shard_number = len(self._shards)
 
         year_pattern = r"(?:CVE-)(\d+)(?:-\d+)"
 
-        timestamp = datetime.datetime.now().timestamp()
+        timestamp = int(datetime.datetime.now().timestamp())
 
         years_in_batch = set(map(
             lambda cve_id: re.findall(year_pattern, cve_id)[0],
-            self._meta.keys()
+            self._cve_meta.keys()
         ))
 
-        # year mask
-        encoded_bitmask = self._encode(years_in_batch)
+        shard_data = [item for item in self._data if item]
+
         # construct file name
-        shard_file = f"{encoded_bitmask}.{shard_number}.{timestamp}"
+        encoded_bitmask = self._encode(years_in_batch)
+        shard_file = f"{shard_number}.{encoded_bitmask}.{len(shard_data)}.{timestamp}"
+
         dump_path = os.path.join(self._storage, shard_file)
 
-        for key in self._meta.keys():
-            self._meta[key].update({'shard': shard_file})
+        for key in self._cve_meta.keys():
+            self._cve_meta[key].update({'shard': shard_number})
 
         # dump batch
         shard = open(dump_path, 'a+b')
-
         register_lock(shard)
-
-        pickle.dump(self._data, shard)
+        pickle.dump(shard_data, shard)
 
         # flush dump buffer
         shard.flush()
 
-        self._shards.add(shard)
+        self._shards.append(shard)
+
+        self._shard_meta[shard_number] = OrderedDict(
+            id=shard_number,
+            mask=encoded_bitmask,
+            size=len(shard_data),
+            timestamp=timestamp
+        )
 
         # dump meta (overwrite the old file)
         self._meta_fd.seek(0)
@@ -207,7 +291,8 @@ class DefaultAdapter(BaseAdapter):
         # flush meta buffer
         self._meta_fd.flush()
 
-        self._flush()
+        if flush:
+            self._flush()
 
     def cursor(self):
         """Initialize cursor to the beginning of a collection."""
@@ -217,10 +302,79 @@ class DefaultAdapter(BaseAdapter):
             )
         else:
             cursor = Cursor(
-                data=self._data
+                data=[
+                    item for item in self._data if item is not None
+                ]
             )
 
         return cursor
+
+    def sample(self, sample_size: int = 20, entire=False):
+        """Draw random sample.
+
+        If `entire` is set to True (default: False), draws the sample from stored
+        data otherwise only from buffer.
+
+        NOTE: In case there is a need for more accurate representation of stored data,
+        it is recommended to use `entire=True`, otherwise due to its significant performance
+        overhead, default value (False) is recommended.
+        """
+        sample_size = int(sample_size)
+
+        if sample_size <= 0:
+            raise ValueError("`sample_size` must be >= 0")
+
+        buffer_size = 0
+        for item in self._data:
+            buffer_size += int(item is not None)
+
+        if buffer_size >= sample_size and not entire:
+            # use default method in case enough data are present in the buffer
+            sample = super(DefaultAdapter, self).sample(sample_size=sample_size)
+
+        else:  # use all shards in order to get more accurate distribution
+
+            # check if there is enough data
+            total_data = sum([
+                shard['size'] for shard in self._shard_meta.values()
+            ])
+
+            if total_data < sample_size:
+                raise ValueError("`sample_size` can not be greater than the total amount of data.")
+
+            num_shards = len(self._shards)
+            avg = sample_size // min(num_shards, sample_size)
+            samples_per_shard = [0] * num_shards
+
+            # evenly distribute
+            distributed = 0
+            while distributed < sample_size:
+                for i, shard in enumerate(self._shard_meta.values()):
+                    shard_size = shard['size']
+                    shard_sample = avg if avg <= shard_size else shard_size
+
+                    distributed += shard_sample
+                    samples_per_shard[i] = shard_sample
+
+                    if distributed >= sample_size:
+                        break
+
+            sample = [None] * sample_size
+
+            for i, shard in enumerate(self._shards):
+                shard_sample_size = samples_per_shard[i]
+
+                if not shard_sample_size:
+                    continue
+
+                shard.seek(0)
+                shard_data = pickle.load(shard, encoding='utf-8')
+
+                sample[i:(i + shard_sample_size)] = random.choices(
+                    shard_data, k=shard_sample_size
+                )
+
+        return sample
 
     def _encode(self, years: typing.Iterable) -> str:
         """Encode binary mask into hexadecimal format."""
@@ -279,6 +433,8 @@ class Cursor(BaseCursor):
 
         self._index = 0
         self._data = data
+
+        self._count = 0
 
         self._shards = shards
         self._batch_size = batch_size

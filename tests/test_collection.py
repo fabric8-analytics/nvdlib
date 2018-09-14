@@ -1,8 +1,9 @@
 """Tests for collector module."""
 import json
+import typing
 import unittest
 
-from nvdlib import model
+from nvdlib import model, utils
 from nvdlib.collection import Collection
 
 
@@ -16,6 +17,7 @@ class TestCollection(unittest.TestCase):
     """Test Collection class."""
 
     def test___init__(self):
+        """Test Collection `__init__` method."""
         document = model.Document.from_data(DATA)
         collection = Collection([document])
 
@@ -26,6 +28,7 @@ class TestCollection(unittest.TestCase):
         self.assertEqual(len(collection), 1)
 
     def test_cursor(self):
+        """Test Collection `cursor` method."""
         document = model.Document.from_data(DATA)
         collection = Collection([document])
 
@@ -39,11 +42,37 @@ class TestCollection(unittest.TestCase):
         # in this case (non-caching mode), collection should also preserve reference to the doc
         self.assertEqual(id(doc), id(document))
 
-    def test_select(self):
-        pass
-
     def test_project(self):
-        pass
+        """Test Collection `project` method."""
+        document = model.Document.from_data(DATA)
+        collection = Collection([document])
 
-    def test_filter(self):
-        pass
+        it = collection.project({'cve.id_': 1})
+
+        self.assertIsInstance(it, typing.Iterator)
+
+        projection, = list(it)
+
+        self.assertIsInstance(projection, utils.AttrDict)
+        self.assertEqual(len(projection.keys()), 2)
+        self.assertTrue(projection['id_'])
+        self.assertTrue(projection['cve'].id_)
+
+        it = collection.project({'id_': 0, 'cve.id_': 1})
+        projection, = list(it)
+
+        self.assertIsInstance(projection, utils.AttrDict)
+        self.assertEqual(len(projection.keys()), 1)
+
+        with self.assertRaises(AttributeError):
+            self.assertTrue(projection['id_'])
+
+        self.assertTrue(projection['cve'].id_)
+
+    def test_pretty(self):
+        """Test Collection `pretty` method."""
+        document = model.Document.from_data(DATA)
+        collection = Collection([document])
+
+        # should not raise
+        collection.pretty()  # default sample size: 20
