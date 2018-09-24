@@ -629,7 +629,9 @@ class FeedManager(object):
 
         return feed_dict
 
-    def collect(self, feeds: typing.List[Union[str, int, JSONFeed]] = None):
+    def collect(self,
+                feeds: Union[typing.Dict[str, JSONFeed],
+                             typing.List[Union[str, int, JSONFeed]]] = None):
         """Return collection of Documents to run queries on."""
 
         def iter_feeds():
