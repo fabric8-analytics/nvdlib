@@ -16,7 +16,7 @@ from nvdlib.model import Document
 class TestUtils(unittest.TestCase):
 
     def test_rhasattr(self):
-        """Test utils.rhasattr function."""
+        """Test `utils.rhasattr` function."""
         obj = utils.AttrDict(
             **{
                 'foo': {
@@ -44,7 +44,7 @@ class TestUtils(unittest.TestCase):
         self.assertTrue(utils.rhasattr(obj_with_arrays, 'buzz.foo.bar'))
 
     def test_rgetattr(self):
-        """Test utils.rgetattr function."""
+        """Test `utils.rgetattr` function."""
 
         obj = utils.AttrDict(
             **{
@@ -58,8 +58,31 @@ class TestUtils(unittest.TestCase):
         self.assertIsInstance(utils.rgetattr(obj, 'foo.bar'), bool)
         self.assertTrue(utils.rgetattr(obj, 'foo.bar'))
 
+    def test_get_cpe(self):
+        """Test `utils.get_cpe` function"""
+        sample_cve_path = 'data/cve-1.0-sample.json'
+
+        with open(sample_cve_path) as f:
+            data = json.loads(f.read())
+            doc = Document.from_data(data)
+
+        # default
+        cpe_list = utils.get_cpe(doc)
+
+        self.assertEqual(len(cpe_list), 6)
+
+        # application
+        cpe_list = utils.get_cpe(doc, cpe_type='application')
+
+        self.assertEqual(len(cpe_list), 0)
+
+        # operating_system
+        cpe_list = utils.get_cpe(doc, cpe_type='op')
+
+        self.assertEqual(len(cpe_list), 6)
+
     def test_dictionarize(self):
-        """Test utils dictionarize function."""
+        """Test `utils.dictionarize` function."""
         sample_cve_path = 'data/cve-1.0-sample.json'
 
         with open(sample_cve_path) as f:
