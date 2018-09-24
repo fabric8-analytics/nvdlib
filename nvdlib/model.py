@@ -23,6 +23,7 @@ Model:
              descriptions: DescriptionEntry(data: List[
                 DescriptionNode(
                     lang: str
+                    value: str
                 )]
         ),
         configurations: nvdlib.model.Configurations(
@@ -33,6 +34,7 @@ Model:
                         ConfigurationsNode(
                             vulnerable: True,
                             cpe: str
+                            version_range: tuple
                         )],
                     operator: str
             )]
@@ -76,6 +78,8 @@ import typing
 
 from abc import ABC, abstractmethod
 from collections import namedtuple
+
+from cpe import CPE
 
 from prettyprinter import pprint
 
@@ -248,14 +252,20 @@ class AffectsEntry(Entry):
 
 class ConfigurationsEntry(Entry):
 
-    class ConfigurationsNode(namedtuple('ConfigurationsNode', ['vulnerable', 'cpe'])):  # TODO: Consider including version data
+    class ConfigurationsNode(namedtuple('ConfigurationsNode',
+                                        ['vulnerable', 'cpe', 'version_range'])):
 
         # noinspection PyInitNewSignature
-        def __new__(cls, vulnerable: bool = None, cpe: str = None, **kwargs):
+        def __new__(cls,
+                    vulnerable: bool = None,
+                    cpe: str = None,
+                    version_range: tuple = None,
+                    **kwargs):
             return super().__new__(
                 cls,
                 vulnerable=vulnerable,
-                cpe=cpe
+                cpe=cpe,
+                version_range=version_range
             )
 
     def __init__(self, data: dict):
@@ -268,7 +278,30 @@ class ConfigurationsEntry(Entry):
         return self.operator
 
     def parse(self, entry: typing.Any):
-        return self.ConfigurationsNode(entry['vulnerable'], entry['cpe23Uri'])
+        version_exact = CPE(entry['cpe23Uri']).get_version()[0] or None
+        if version_exact in ['-', '*']:  # same as missing entry
+            version_exact = None
+
+        version_end_excl = entry.get('versionEndExcluding', None)
+        version_end_incl = entry.get('versionEndIncluding', None)
+        version_start_incl = entry.get('versionStartIncluding', None)
+        version_start_excl = entry.get('versionStartExcluding', None)
+
+        version_range = utils.get_victims_notation(
+            (
+                version_exact,
+                version_end_excl,
+                version_end_incl,
+                version_start_incl,
+                version_start_excl
+            )
+        )
+
+        return self.ConfigurationsNode(
+            vulnerable=entry['vulnerable'],
+            cpe=entry['cpe23Uri'],
+            version_range=version_range
+        )
 
 
 class Configurations(namedtuple('Configurations', [

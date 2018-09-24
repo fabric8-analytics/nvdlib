@@ -96,25 +96,33 @@ class AttrDict(Mapping):
         pprint(dictionarize(self))
 
 
-def get_victims_notation(version_tuple: typing.Sequence):
+def get_victims_notation(version_tuple: typing.Sequence) -> list:
     """Maps version range tuple to corresponding victims string notation.
+
+    NOTE: This is pseudo-victims notations, as original victims only permits
+    inclusive interval boundaries.
+
     Assumes arguments ``version_range`` is a tuple or a sequence
     ``(versionExact, versionEndExcluding, versionEndIncluding, versionStartIncluding, versionEndExcluding)``
+
 
     :returns: str, victims notation of version ranges (see https://github.com/victims/victims-cve-db)
     """
     if len(version_tuple) != len(SYMBOLS) or len(version_tuple) > 5:
+        print(version_tuple)
         raise AttributeError("shape of ``version_tuple`` does not match shape of ``SYMBOLS``."
                              " Expected shapes (5,) == (5,), got: %r != %r" % (len(version_tuple), len(SYMBOLS)))
 
-    # Check if an exact version is selected, in that case no version range is allowed
-    if version_tuple[0] and any(version_tuple[1:]):
-        raise AttributeError("``version_tuple`` contains both exact version and version range, which is not allowed.")
+    if not any(version_tuple):
+        victims_notation = None  # undefined
 
-    indices = [i for i, val in enumerate(version_tuple) if val is not None]
-    notation = [str(SYMBOLS[i]) + str(version_tuple[i]) for i in indices]
+    else:
+        indices = [i for i, val in enumerate(version_tuple) if val is not None]
+        victims_notation = [
+            str(SYMBOLS[i]) + str(version_tuple[i]) for i in indices
+        ]
 
-    return ",".join(notation)
+    return victims_notation
 
 
 def compute_sha256(fpath):
@@ -128,7 +136,7 @@ def compute_sha256(fpath):
     return sha256.hexdigest().lower()
 
 
-def rhasattr(obj, attr: str):
+def rhasattr(obj, attr: str) -> bool:
     # check for and array
     if isinstance(obj, list):
         if not obj:  # empty list
@@ -145,7 +153,7 @@ def rhasattr(obj, attr: str):
     return rhasattr(getattr(obj, left), right)
 
 
-def rgetattr(obj, attr: str):
+def rgetattr(obj, attr: str) -> typing.Any:
     # check for and array
     if isinstance(obj, list):
         if not obj:  # empty list
@@ -161,7 +169,7 @@ def rgetattr(obj, attr: str):
     return rgetattr(getattr(obj, left), right)
 
 
-def get_cpe(doc, cpe_type: str = None):
+def get_cpe(doc, cpe_type: str = None) -> list:
     """Get list of CPE objects.
 
     :param doc: Document, single Document object from Collection
