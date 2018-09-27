@@ -278,7 +278,13 @@ class ConfigurationsEntry(Entry):
         return self.operator
 
     def parse(self, entry: typing.Any):
-        version_exact = CPE(entry['cpe23Uri']).get_version()[0] or None
+        try:
+            version_exact = CPE(entry['cpe23Uri']).get_version()[0] or None
+        except NotImplementedError:
+            # workaround for invalid CPE string entry, see [#6]
+            # [#6]: https://github.com/fabric8-analytics/nvdlib/pull/6
+            version_exact = None
+
         if version_exact in ['-', '*']:  # same as missing entry
             version_exact = None
 
