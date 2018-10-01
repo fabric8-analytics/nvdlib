@@ -153,20 +153,35 @@ def rhasattr(obj, attr: str) -> bool:
     return rhasattr(getattr(obj, left), right)
 
 
-def rgetattr(obj, attr: str) -> typing.Any:
-    # check for and array
+def rgetattr(obj,
+             attr: str,
+             repl_missing=None,
+             raise_if_missing=False) -> typing.Any:
+
     if isinstance(obj, list):
         if not obj:  # empty list
             return None
 
-        return [rgetattr(item, attr) for item in obj]
+        return [
+            rgetattr(item, attr, repl_missing, raise_if_missing)
+            for item in obj
+        ]
 
     try:
         left, right = attr.split('.', 1)
     except ValueError:
-        return getattr(obj, attr)  # TODO: Think about this.. should raise or not?
 
-    return rgetattr(getattr(obj, left), right)
+        try:
+            return getattr(obj, attr)
+
+        except AttributeError as exc:
+            # handle inconsistency
+            if raise_if_missing:
+                raise exc
+
+            return repl_missing
+
+    return rgetattr(getattr(obj, left), right, repl_missing, raise_if_missing)
 
 
 def get_cpe(doc, cpe_type: str = None) -> list:

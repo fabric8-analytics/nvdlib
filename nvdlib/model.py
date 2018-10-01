@@ -551,7 +551,7 @@ class Document(namedtuple('Document', [
         )
 
     # noinspection PyMethodMayBeStatic
-    def project(self, p_dict: typing.Dict[str, int]) -> utils.AttrDict:
+    def project(self, p_dict: typing.Dict[str, int], **kwargs) -> utils.AttrDict:
         """Project specific document attributes."""
         keys = p_dict.keys()
 
@@ -570,7 +570,7 @@ class Document(namedtuple('Document', [
                 ptr_dict[sub_key] = dict()
                 ptr_dict = ptr_dict[sub_key]
 
-            ptr_dict[sub_keys[-1]] = utils.rgetattr(self, key)
+            ptr_dict[sub_keys[-1]] = utils.rgetattr(self, key, **kwargs)
 
         return utils.AttrDict(**projection)
 
