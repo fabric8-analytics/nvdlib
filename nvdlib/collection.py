@@ -123,14 +123,15 @@ class Collection(object):
         """Draw random sample of given size."""
         return self._adapter.sample(sample_size)
 
-    # TODO: Create Projection proxy
-    def project(self, projection: typing.Dict[str, int]) -> typing.Iterator:
+    def project(self,
+                projection: typing.Dict[str, int],
+                repl_missing=None) -> typing.Iterator:
         """Yield projected document attributes."""
         cursor = self.cursor()
 
         while True:
             try:
-                yield cursor.next().project(projection)
+                yield cursor.next().project(projection, repl_missing=repl_missing)
             except StopIteration:
                 break
 

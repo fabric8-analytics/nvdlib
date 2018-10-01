@@ -50,14 +50,32 @@ class TestUtils(unittest.TestCase):
         obj = utils.AttrDict(
             **{
                 'foo': {
-                    'bar': True
+                    'bar': True,
+                    'buzz': [
+                        utils.AttrDict(**{
+                            'fuzz': True
+                        }),
+
+                        # introduce inconsistency -- can happen in reality
+                        utils.AttrDict(**{
+                            'no-fuzz': True
+                        })
+                    ]
                 }
             }
         )
 
+        self.assertTrue(utils.rgetattr(obj, 'foo.bar'))
         self.assertIsInstance(utils.rgetattr(obj, 'foo'), utils.AttrDict)
         self.assertIsInstance(utils.rgetattr(obj, 'foo.bar'), bool)
-        self.assertTrue(utils.rgetattr(obj, 'foo.bar'))
+
+        # should not raise
+        self.assertIsInstance(utils.rgetattr(obj, 'foo.buzz.fuzz')[0], bool)
+
+        self.assertIn(
+            'Test',
+            utils.rgetattr(obj, 'foo.buzz.no_fuzz', repl_missing='Test'),
+        )
 
     def test_get_cpe(self):
         """Test `utils.get_cpe` function."""
@@ -110,8 +128,6 @@ class TestUtils(unittest.TestCase):
         # including-excluding
         version_tuple = (None, None, '2.0', None, '1.0')
         victims_notation = utils.get_victims_notation(version_tuple)
-
-        print(victims_notation)
 
         # TODO: should we solve this?
         # self.assertTrue(
