@@ -77,9 +77,9 @@ class TestSelector(unittest.TestCase):
         # nested
         self.assertTrue(select(obj_with_array, 'fuzz.foo.bar'))
         self.assertTrue(select(obj_with_array, 'fuzz.buzz'))
-        # incorrect
-        with self.assertRaises(AttributeError):
-            select(obj_with_array, 'fuzz.bar')
+
+        # incorrect, should not raise
+        self.assertFalse(select(obj_with_array, 'fuzz.bar'))
 
     def test_greater(self):
         """Test `gt` and `ge` selector."""

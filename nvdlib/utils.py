@@ -4,10 +4,6 @@ import hashlib
 import operator
 import typing
 
-import itertools as it
-
-from cpe import CPE
-
 from collections import Mapping
 from prettyprinter import pprint
 
@@ -182,40 +178,3 @@ def rgetattr(obj,
             return repl_missing
 
     return rgetattr(getattr(obj, left), right, repl_missing, raise_if_missing)
-
-
-def get_cpe(doc, cpe_type: str = None) -> list:
-    """Get list of CPE objects.
-
-    :param doc: Document, single Document object from Collection
-    :param cpe_type: str, <type>
-        <type>: any of (or abbreviation of) [application, hardware, operating_system]
-    """
-    valid_cpe_types = ['application', 'hardware', 'operating_system']
-    if cpe_type and not isinstance(cpe_type, str):
-        raise TypeError(f"`cpe_type` expected to be str, got: {type(cpe_type)}")
-
-    type_to_check = None
-
-    if cpe_type is not None:
-        for t in valid_cpe_types:
-            if t.startswith(cpe_type.lower()):
-                type_to_check = t
-                break
-
-        if cpe_type and type_to_check is None:
-            raise ValueError(
-                f"`cpe_type` expected to be any of {valid_cpe_types}"
-            )
-
-    cpe_list = [
-        CPE(cpe_str) for cpe_str in it.chain(*rgetattr(doc, 'configurations.nodes.data.cpe'))
-    ]
-
-    if type_to_check:
-        cpe_list = list(filter(
-            lambda cpe: eval(f"cpe.is_{type_to_check}()"),
-            cpe_list
-        ))
-
-    return cpe_list
