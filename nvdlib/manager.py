@@ -13,6 +13,7 @@ import fcntl
 import gc
 import gzip
 import io
+import re
 import ujson
 
 import os
@@ -25,6 +26,11 @@ from typing import Union
 from nvdlib import config, model, utils
 from nvdlib.collection import Collection
 
+
+FEED_NAME_PATTERN = r"nvdcve-" \
+                    r"(?P<version>[\d.]+)-" \
+                    r"(?P<name>(?P<name_string>(([A-Za-z]+)))|(?P<name_year>([\d]+)))" \
+                    r".json"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -249,6 +255,7 @@ class JSONFeedMetadata(object):
         data_dir = data_dir or config.DEFAULT_DATA_DIR
 
         metadata_filename = cls.METADATA_FILE_TEMPLATE.format(feed=feed_name)
+
         metadata_path = os.path.join(data_dir, metadata_filename)
 
         exists = os.path.exists(metadata_path)
@@ -514,6 +521,8 @@ class FeedManager(object):
                        data_dir: str = None,
                        load=False) -> typing.Dict[str, JSONFeed]:
         """Asynchronously download JSON feeds."""
+        feed_names = list(map(self.parse_feed_name, feed_names))
+
         self.feeds_check(*feed_names, data_dir=data_dir or self._data_dir)
 
         futures = [
@@ -565,6 +574,8 @@ class FeedManager(object):
                    feed_names: typing.List[Union[str, int]],
                    data_dir: str = None) -> typing.Dict[str, JSONFeed]:
         """Asynchronously load existing JSON feeds."""
+        feed_names = list(map(self.parse_feed_name, feed_names))
+
         self.feeds_check(*feed_names, data_dir=data_dir or self._data_dir)
 
         futures = [
@@ -596,6 +607,7 @@ class FeedManager(object):
             need to be called on desired list of feeds.
         """
         data_dir = data_dir or self._data_dir
+        feed_names = list(map(self.parse_feed_name, feed_names))
 
         self.feeds_check(*feed_names, data_dir=data_dir)
 
@@ -652,6 +664,8 @@ class FeedManager(object):
                     self._loop.run_until_complete(feed.load())
 
                 elif isinstance(feed, str) or isinstance(feed, int):
+                    feed = self.parse_feed_name(feed)
+
                     feed_dict = self.load_feeds([feed])
 
                     feed_count = len(feed_dict)
@@ -747,3 +761,12 @@ class FeedManager(object):
         loop.set_default_executor(executor)
 
         return loop
+
+    @staticmethod
+    def parse_feed_name(feed_name):
+        match = re.fullmatch(FEED_NAME_PATTERN, str(feed_name), re.IGNORECASE)
+
+        if match:
+            return match.group('name')
+
+        return feed_name

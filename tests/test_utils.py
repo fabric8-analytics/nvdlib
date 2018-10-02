@@ -77,29 +77,6 @@ class TestUtils(unittest.TestCase):
             utils.rgetattr(obj, 'foo.buzz.no_fuzz', repl_missing='Test'),
         )
 
-    def test_get_cpe(self):
-        """Test `utils.get_cpe` function."""
-        sample_cve_path = 'data/cve-1.0-sample.json'
-
-        with open(sample_cve_path) as f:
-            data = json.loads(f.read())
-            doc = Document.from_data(data)
-
-        # default
-        cpe_list = utils.get_cpe(doc)
-
-        self.assertEqual(len(cpe_list), 6)
-
-        # application
-        cpe_list = utils.get_cpe(doc, cpe_type='application')
-
-        self.assertEqual(len(cpe_list), 0)
-
-        # operating_system
-        cpe_list = utils.get_cpe(doc, cpe_type='op')
-
-        self.assertEqual(len(cpe_list), 6)
-
     def test_get_victims_notation(self):
         """Test `utils.get_victims_notation` function."""
         victims_pattern = r"^(?P<condition>[><=]=)" \
