@@ -453,13 +453,14 @@ class JSONFeed(object):
 
 class FeedManager(object):
 
+    DEFAULT_FEED = 'recent'
     MAX_NUM_WORKERS = 10
 
     def __init__(self, data_dir: str = None, n_workers: int = None):
         self._data_dir = data_dir or config.DEFAULT_DATA_DIR
         self._n_workers = n_workers
 
-        self._feed_names: typing.Set[str] = {'recent'}
+        self._feed_names: typing.Set[str] = {self.DEFAULT_FEED}
         self._feeds: typing.Dict[str, JSONFeed] = dict()
 
         # create data_dir
