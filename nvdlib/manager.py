@@ -56,7 +56,7 @@ class JSONFeedMetadata(object):
         self._is_parsed = False
 
         if self._is_downloaded:
-            with open(self._metadata_path, 'r') as f:
+            with open(self._metadata_path, 'r', encoding='utf-8') as f:
                 self._data = f.read()
                 self._data_raw = self._data
 
@@ -126,7 +126,7 @@ class JSONFeedMetadata(object):
                     self._data_raw = await response.text('utf-8')
 
         elif await self.metadata_exist(self._name, self._data_dir, loop=loop):
-            async with aiofiles.open(self._metadata_path, 'r', loop=loop) as f:
+            async with aiofiles.open(self._metadata_path, 'r', loop=loop, encoding='utf-8') as f:
                 self._data_raw = await f.read()
 
         else:
@@ -160,7 +160,7 @@ class JSONFeedMetadata(object):
             self._data_dir = data_dir
             self._metadata_path = os.path.join(self._data_dir, self._metadata_filename)
 
-        async with aiofiles.open(self._metadata_path, 'w', loop=loop) as f:
+        async with aiofiles.open(self._metadata_path, 'w', loop=loop, encoding='utf-8') as f:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             await f.write(self._data_raw)
             asyncio.sleep(0.1)
@@ -255,7 +255,7 @@ class JSONFeedMetadata(object):
 
         if exists and sha256:
             # check sha265
-            async with aiofiles.open(metadata_path, 'r', loop=loop) as f:
+            async with aiofiles.open(metadata_path, 'r', loop=loop, encoding='utf-8') as f:
                 metadata = await f.read()
 
             parsed_existing = cls.parse_metadata(metadata)
@@ -428,7 +428,7 @@ class JSONFeed(object):
         loop = loop or asyncio.get_event_loop()
 
         if not self._is_loaded:
-            async with aiofiles.open(self._data_path, 'r', loop=loop) as f:
+            async with aiofiles.open(self._data_path, 'r', loop=loop, encoding='utf-8') as f:
                 self._data = ujson.loads(await f.read())
                 asyncio.sleep(0.1)
                 self._is_loaded = True
