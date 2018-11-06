@@ -287,7 +287,7 @@ class ConfigurationsEntry(Entry):
     def __init__(self, data: dict):
         self._operator: str = data['operator']
 
-        super(ConfigurationsEntry, self).__init__(*data.get('cpe', []))
+        super(ConfigurationsEntry, self).__init__(*data.get('cpe_match', []))
 
     @property
     def operator(self) -> str:
