@@ -363,7 +363,7 @@ class Configurations(namedtuple('Configurations', [
 
 
 class Impact(namedtuple('Impact', [
-    'severity', 'exploitability_score', 'impact_score', 'cvss'
+    'severity', 'exploitability_score', 'impact_score', 'insuf_info', 'cvss'
 ])):
     """Representation of NVD Impact object."""
 
@@ -401,6 +401,7 @@ class Impact(namedtuple('Impact', [
                 severity: str = None,
                 exploitability_score: float = None,
                 impact_score: float = None,
+                insuf_info: bool = None,
                 cvss: CVSSNode = None):
 
         cvss: Impact.CVSSNode = cvss or Impact.CVSSNode()
@@ -410,6 +411,7 @@ class Impact(namedtuple('Impact', [
             severity=severity,
             exploitability_score=exploitability_score,
             impact_score=impact_score,
+            insuf_info=insuf_info,
             cvss=cvss
         )
 
@@ -420,6 +422,7 @@ class Impact(namedtuple('Impact', [
             return cls(**{})
 
         impact_data = data['baseMetricV2']
+        insuf_info = impact_data.get('acInsufInfo', False)
 
         severity = impact_data['severity']
         exploitability_score = impact_data['exploitabilityScore']
@@ -441,6 +444,7 @@ class Impact(namedtuple('Impact', [
             severity=severity,
             exploitability_score=exploitability_score,
             impact_score=impact_score,
+            insuf_info=insuf_info,
             cvss=cls.CVSSNode(**cvss_modified)
         )
 
