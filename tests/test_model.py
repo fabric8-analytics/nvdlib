@@ -1,5 +1,6 @@
 """Tests for model module."""
 
+import os
 import datetime
 import json
 import unittest
@@ -8,7 +9,7 @@ from nvdlib import model
 from nvdlib.utils import AttrDict
 
 
-SAMPLE_CVE_PATH = 'data/cve-1.0-sample.json'
+SAMPLE_CVE_PATH = os.path.join(os.path.dirname(__file__), 'data/cve-1.0-sample.json')
 
 with open(SAMPLE_CVE_PATH) as f:
     DATA = json.loads(f.read())

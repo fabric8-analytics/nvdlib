@@ -12,7 +12,7 @@ from nvdlib.model import Document
 import nvdlib.query_selectors as selectors
 
 
-SAMPLE_CVE_PATH = 'data/cve-1.0-sample.json'
+SAMPLE_CVE_PATH = os.path.join(os.path.dirname(__file__), 'data/cve-1.0-sample.json')
 
 with open(SAMPLE_CVE_PATH) as f:
     data = json.load(f)
