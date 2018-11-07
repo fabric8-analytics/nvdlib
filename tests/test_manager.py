@@ -1,11 +1,12 @@
 """Tests for manager module."""
 
+import os
 import asyncio
 import datetime
-import os
 import psutil
 import tempfile
 import unittest
+from pathlib import Path
 
 from nvdlib.collection import Collection
 from nvdlib.manager import FeedManager, JSONFeed, JSONFeedMetadata
@@ -13,7 +14,7 @@ from nvdlib.manager import FeedManager, JSONFeed, JSONFeedMetadata
 
 _EVENT_LOOP = asyncio.get_event_loop()
 _TEMP_DATA_DIR = tempfile.mkdtemp(prefix='tests_', suffix='_manager')
-_TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), 'data/')
+_TEST_DATA_DIR = Path(__file__).parent / 'data/'
 
 
 class TestJSONFeedMetadata(unittest.TestCase):
@@ -64,7 +65,7 @@ class TestJSONFeedMetadata(unittest.TestCase):
 
     def test__parse_metadata(self):
         """Test JSONFeedMetadata `_parse_metadata` method."""
-        meta_file = os.path.join(os.path.dirname(__file__), 'data/nvdcve-1.0-sample.meta')
+        meta_file = Path(__file__).parent / 'data/nvdcve-1.0-sample.meta'
         with open(meta_file, 'r') as f:
             meta_data = f.read()
 
