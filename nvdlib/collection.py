@@ -1,6 +1,7 @@
 """Module defining Collector class -- a facade for handling document operations using adapters."""
 
 import os
+from pathlib import Path
 import shutil
 import tempfile
 
@@ -24,10 +25,7 @@ class Collection(object):
         self._count: int = 0
         self._clear_storage = True  # in the future, this argument can be modifiable
 
-        self._storage = storage or os.path.join(
-            tempfile.gettempdir(),
-            f"nvdlib/.dump/{id(self)}"
-        )
+        self._storage = storage or Path(tempfile.gettempdir()) / f"nvdlib/.dump/{id(self)}"
 
         # create directory
         os.makedirs(self._storage)

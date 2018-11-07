@@ -1,8 +1,8 @@
 """Tests for selector module."""
 
-import os
 import json
 import unittest
+from pathlib import Path
 
 from datetime import datetime
 
@@ -10,7 +10,7 @@ import nvdlib.query_selectors as selectors
 from nvdlib import utils
 
 
-SAMPLE_CVE_PATH = os.path.join(os.path.dirname(__file__), 'data/cve-1.0-sample.json')
+SAMPLE_CVE_PATH = Path(__file__).parent / 'data/cve-1.0-sample.json'
 
 with open(SAMPLE_CVE_PATH) as f:
     DATA = json.loads(f.read())

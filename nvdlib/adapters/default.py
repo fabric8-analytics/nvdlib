@@ -6,6 +6,7 @@ import gc
 import io
 import os
 import re
+from pathlib import Path
 
 import datetime
 import time
@@ -133,7 +134,7 @@ class DefaultAdapter(BaseAdapter):
         self._storage = storage or self._storage
 
         # metadata
-        self._meta_fpath = os.path.join(self._storage, '.meta')
+        self._meta_fpath = Path(self._storage) / '.meta'
 
         if not os.path.isfile(self._meta_fpath):
             open(self._meta_fpath, 'wb').close()
@@ -152,7 +153,7 @@ class DefaultAdapter(BaseAdapter):
         for value_dict in self._cve_meta.values():
 
             batch_file = value_dict['batch']
-            batch_fpath = os.path.join(self._storage, batch_file)
+            batch_fpath = Path(self._storage) / batch_file
             batch_fd = open(batch_fpath, 'r+b')
 
             register_lock(batch_fd)
@@ -261,7 +262,7 @@ class DefaultAdapter(BaseAdapter):
         encoded_bitmask = self._encode(years_in_batch)
         shard_file = f"{shard_number}.{encoded_bitmask}.{len(shard_data)}.{timestamp}"
 
-        dump_path = os.path.join(self._storage, shard_file)
+        dump_path = Path(self._storage) / shard_file
 
         for key in self._cve_meta.keys():
             self._cve_meta[key].update({'shard': shard_number})

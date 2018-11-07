@@ -1,10 +1,10 @@
 """Tests for adapters module."""
 
 import os
-
 import json
 import tempfile
 import unittest
+from pathlib import Path
 
 from nvdlib.adapters import DefaultAdapter
 from nvdlib.model import Document
@@ -12,7 +12,7 @@ from nvdlib.model import Document
 import nvdlib.query_selectors as selectors
 
 
-SAMPLE_CVE_PATH = os.path.join(os.path.dirname(__file__), 'data/cve-1.0-sample.json')
+SAMPLE_CVE_PATH = Path(__file__).parent / 'data/cve-1.0-sample.json'
 
 with open(SAMPLE_CVE_PATH) as f:
     data = json.load(f)
@@ -70,7 +70,7 @@ class TestDefaultAdapter(unittest.TestCase):
         self.assertEqual(len(os.listdir(tmp_storage)), 2)
 
         # meta not empty
-        with open(os.path.join(tmp_storage, '.meta'), 'r') as f:
+        with open(Path(tmp_storage) / '.meta', 'r') as f:
             self.assertTrue(f.read())
 
         # ---

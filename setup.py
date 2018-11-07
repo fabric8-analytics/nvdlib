@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from setuptools import setup, find_packages
 
@@ -6,7 +7,7 @@ from setuptools import setup, find_packages
 BASE_DIR = os.path.dirname(__file__)
 
 ABOUT = dict()
-with open(os.path.join(BASE_DIR, 'nvdlib', '__about__.py')) as f:
+with open(Path(BASE_DIR) / 'nvdlib' / '__about__.py') as f:
     exec(f.read(), ABOUT)
 
 with open('requirements.txt') as f:

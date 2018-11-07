@@ -17,6 +17,7 @@ import re
 import ujson
 
 import os
+from pathlib import Path
 
 import logging
 
@@ -50,7 +51,7 @@ class JSONFeedMetadata(object):
 
         self._metadata_url = self.METADATA_URL_TEMPLATE.format(feed=self._name)
         self._metadata_filename = self.METADATA_FILE_TEMPLATE.format(feed=self._name)
-        self._metadata_path = os.path.join(self._data_dir, self._metadata_filename)
+        self._metadata_path = Path(self._data_dir) / self._metadata_filename
 
         self._last_modified: datetime.datetime = None
         self._size: int = None
@@ -164,7 +165,7 @@ class JSONFeedMetadata(object):
 
         if data_dir:
             self._data_dir = data_dir
-            self._metadata_path = os.path.join(self._data_dir, self._metadata_filename)
+            self._metadata_path = Path(self._data_dir) / self._metadata_filename
 
         async with aiofiles.open(self._metadata_path, 'w', loop=loop, encoding='utf-8') as f:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -202,7 +203,7 @@ class JSONFeedMetadata(object):
 
         if data_dir:
             self._data_dir = data_dir
-            self._metadata_path = os.path.join(self._data_dir, self._metadata_filename)
+            self._metadata_path = Path(self._data_dir) / self._metadata_filename
 
         os.makedirs(self._data_dir, exist_ok=True)
 
@@ -256,7 +257,7 @@ class JSONFeedMetadata(object):
 
         metadata_filename = cls.METADATA_FILE_TEMPLATE.format(feed=feed_name)
 
-        metadata_path = os.path.join(data_dir, metadata_filename)
+        metadata_path = Path(data_dir) / metadata_filename
 
         exists = os.path.exists(metadata_path)
 
@@ -320,7 +321,7 @@ class JSONFeed(object):
 
         self._data_url = self.DATA_URL_TEMPLATE.format(feed=self._name)
         self._data_filename = 'nvdcve-1.0-{feed}.json'.format(feed=self._name)
-        self._data_path = os.path.join(self._data_dir, self._data_filename)
+        self._data_path = Path(self._data_dir) / self._data_filename
 
         self._metadata = JSONFeedMetadata(
             feed_name=self._name,

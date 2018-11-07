@@ -6,10 +6,10 @@ for all utils or contain asserts or true unit tests.
 Utils module might be excluded from coverage measures.
 """
 
-import os
 import json
 import re
 import unittest
+from pathlib import Path
 
 from nvdlib import utils
 from nvdlib.model import Document
@@ -134,7 +134,7 @@ class TestUtils(unittest.TestCase):
 
     def test_dictionarize(self):
         """Test `utils.dictionarize` function."""
-        sample_cve_path = os.path.join(os.path.dirname(__file__), 'data/cve-1.0-sample.json')
+        sample_cve_path = Path(__file__).parent / 'data/cve-1.0-sample.json'
 
         with open(sample_cve_path) as f:
             data = json.loads(f.read())
