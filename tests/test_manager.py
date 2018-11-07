@@ -443,7 +443,7 @@ class TestFeedManager(unittest.TestCase):
         feeds = ['recent', 2018]
 
         # should not raise
-        _ = FeedManager.feeds_check(*feeds)
+        FeedManager.feeds_check(*feeds)
 
         # ---
         # existing feeds, local
@@ -455,7 +455,7 @@ class TestFeedManager(unittest.TestCase):
 
         # should raise
         with self.assertRaises(ValueError):
-            _ = FeedManager.feeds_check(*feeds)
+            FeedManager.feeds_check(*feeds)
 
     def test_feeds_exist(self):
         """Test FeedManager `feeds_exist` method."""

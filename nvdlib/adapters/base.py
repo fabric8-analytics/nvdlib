@@ -89,4 +89,3 @@ class BaseAdapter(ABC):
             [item for item in self._data if item is not None],
             k=sample_size
         )
-
