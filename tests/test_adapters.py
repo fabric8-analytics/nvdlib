@@ -204,7 +204,7 @@ class TestDefaultAdapter(unittest.TestCase):
         # ---
         # too big
         with self.assertRaises(ValueError):
-            _ = adapter.sample(sample_size=20)
+            adapter.sample(sample_size=20)
 
     def test__encode(self):
         """Test DefaultAdapters `_encode` method."""

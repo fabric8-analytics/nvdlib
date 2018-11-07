@@ -2,7 +2,9 @@ import os
 from pathlib import Path
 
 # constants
-XDG_DATA_HOME = os.environ.get('XDG_DATA_HOME', Path(os.environ.get('HOME', '/tmp/')) / '.local/share/')
+XDG_DATA_HOME = os.environ.get(
+    'XDG_DATA_HOME', Path(os.environ.get('HOME', '/tmp/')) / '.local/share/'
+)
 DEFAULT_DATA_DIR = Path(XDG_DATA_HOME) / 'nvd/'
 
 # logging
@@ -14,5 +16,6 @@ ADAPTER = os.environ.get('ADAPTER', 'DEFAULT')
 # download
 FEED_DOWNLOAD_TIMEOUT = 300  # seconds
 
-# query selectors
-TYPE_CHECK_LEVEL = 1  # [0, 1, 2], 0: skip, 1: logger warning, 2: strictly raise TypeError on type mismatch
+# query selectors:
+# [0, 1, 2], 0: skip, 1: logger warning, 2: strictly raise TypeError on type mismatch
+TYPE_CHECK_LEVEL = 1
