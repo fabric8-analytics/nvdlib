@@ -6,3 +6,7 @@
 **.py[cod]
 .eggs/
 nvdlib.egg-info/
+venv/
+
+# Tests
+.coverage
