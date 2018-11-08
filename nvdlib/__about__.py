@@ -1,3 +1,6 @@
+"""This module holds a basic information about the project."""
+
+
 __all__ = [
     "__title__", "__summary__", "__url__", "__version__",
     "__author__", "__email__", "__collaborators__", "__license__"

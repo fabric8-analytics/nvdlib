@@ -24,9 +24,8 @@ def _warn_or_raise(msg):
         raise TypeError(msg)
 
 
-def selector(fn: callable) -> typing.Callable:
+def selector(fn: callable) -> typing.Callable:  # noqa: D401
     """Wrapper for specific selectors."""
-
     @wraps(fn)
     def _arg_wrapper(*args, **kwargs):
 

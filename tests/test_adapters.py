@@ -23,10 +23,10 @@ with open(SAMPLE_CVE_PATH) as f:
 
 
 class TestDefaultAdapter(unittest.TestCase):
+    """Tests for adapters."""
 
     def test___init__(self):
         """Test DefaultAdapters initialization."""
-
         adapter = DefaultAdapter()
 
         self.assertIsInstance(adapter, DefaultAdapter)

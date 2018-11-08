@@ -93,6 +93,7 @@ class Collection(object):
 
     @property
     def storage(self):
+        """Get storage for this collection."""
         return self._storage
 
     def count(self) -> int:

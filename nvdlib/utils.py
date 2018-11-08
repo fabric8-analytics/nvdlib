@@ -16,7 +16,7 @@ OPERATOR_DICT = dict(zip(SYMBOLS, OPERATORS))
 
 
 def dictionarize(obj) -> dict:
-
+    """Turn objects into dictionaries, recursively."""
     array_types = [list, set, tuple]
 
     def _dictionarize(out_dict: dict, **kwargs) -> dict:
@@ -50,14 +50,16 @@ def dictionarize(obj) -> dict:
     return _call()
 
 
-class AttrDict(Mapping):
+class AttrDict(Mapping):  # noqa: D205,D400
     """A class to convert a nested Dictionary into an object with key-values
     accessibly using attribute notation (AttributeDict.attribute) instead of
     key notation (Dict["key"]).
 
     This class recursively sets Dicts to objects, allowing to recurse down
     the nested dicts (like: AttributeDict.attr.attr)
+
     """
+
     def __init__(self, **entries):
         for key, value in entries.items():
             # replace dashes by underscores JIC
@@ -83,24 +85,22 @@ class AttrDict(Mapping):
         return self.__dict__.__repr__()
 
     def __getitem__(self, key):
-        """
-        Provides dict-style access to attributes
-        """
+        """Provide dict-style access to attributes."""
         return getattr(self, key)
 
     def pretty(self):
+        """Pretty print."""
         pprint(dictionarize(self))
 
 
 def get_victims_notation(version_tuple: typing.Sequence) -> list:
-    """Maps version range tuple to corresponding victims string notation.
+    """Map version range tuple to corresponding victims string notation.
 
     NOTE: This is pseudo-victims notations, as original victims only permits
     inclusive interval boundaries.
 
     Assumes arguments ``version_range`` is a tuple or a sequence
     ``(versionExact, versionEndExcluding, versionEndIncluding, versionStartIncluding, versionEndExcluding)``
-
 
     :returns: str, victims notation of version ranges (see https://github.com/victims/victims-cve-db)
     """
@@ -122,6 +122,7 @@ def get_victims_notation(version_tuple: typing.Sequence) -> list:
 
 
 def compute_sha256(fpath):
+    """Compute sha256 hash of a given file."""
     sha256 = hashlib.sha256()
     with open(fpath, 'rb') as f:
         while True:
@@ -133,6 +134,10 @@ def compute_sha256(fpath):
 
 
 def rhasattr(obj, attr: str) -> bool:
+    """Recursive hasattr on iterable.
+
+    Returns True if any of the elements has the attribute.
+    """
     # check for and array
     if isinstance(obj, list):
         if not obj:  # empty list
@@ -153,7 +158,10 @@ def rgetattr(obj,
              attr: str,
              repl_missing=None,
              raise_if_missing=False) -> typing.Any:
+    """Get attribute from given object.
 
+    The attribute can be nested, i.e.: 'foo.bar.baz'
+    """
     if isinstance(obj, list):
         if not obj:  # empty list
             return None
