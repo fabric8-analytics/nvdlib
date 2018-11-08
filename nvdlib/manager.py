@@ -37,6 +37,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class JSONFeedMetadata(object):
+    """Metadata for NVD feed."""
 
     METADATA_URL_TEMPLATE = "https://nvd.nist.gov/feeds/json/cve/1.0/nvdcve-1.0-{feed}.meta"
     METADATA_FILE_TEMPLATE = "nvdcve-1.0-{feed}.meta"
@@ -83,35 +84,47 @@ class JSONFeedMetadata(object):
 
     @property
     def data(self) -> typing.Union[str, dict, None]:
+        """Get parsed data."""
         return self._data
 
     @property
     def raw_data(self) -> typing.Union[str, None]:
+        """Get raw data."""
         return self._data_raw
 
     @property
     def sha256(self):
+        """Get sha256 hash."""
         return self._sha256.lower()
 
     @property
     def filename(self):
+        """Get filename."""
         return self._metadata_filename
 
     @property
     def path(self):
+        """Get metadata path."""
         return self._metadata_path
 
     @property
     def last_modified(self) -> datetime.datetime:
+        """Get last modified date."""
         return self._last_modified
 
     def is_parsed(self):
+        """Check if the metadata has been parsed or not."""
         return self._is_parsed
 
     def is_downloaded(self):
+        """Check if the metadata has been downloaded or not."""
         return self._is_downloaded
 
     def is_ready(self):
+        """Check if everything is ready or not.
+
+        ready = metadata has been downloaded and parsed.
+        """
         return self._is_downloaded and self._is_parsed
 
     async def fetch(self, loop: asyncio.BaseEventLoop = None):
@@ -183,7 +196,7 @@ class JSONFeedMetadata(object):
                      data_dir: str = None,
                      save=True,
                      loop: asyncio.BaseEventLoop = None):
-        """Fetches and updates metadata.
+        """Fetch and update metadata.
 
         :param metadata: dict, if not specified, fetches metadata from NVD
         :param data_dir: str, metadata directory
@@ -273,7 +286,7 @@ class JSONFeedMetadata(object):
 
     @staticmethod
     def parse_metadata(metadata: str):
-
+        """Parse metadata."""
         metadata_dict = {
             'last_modified': None,
             'size': None,
@@ -310,6 +323,7 @@ class JSONFeedMetadata(object):
 
 
 class JSONFeed(object):
+    """NVD's JSON feed."""
 
     DATA_URL_TEMPLATE = 'https://static.nvd.nist.gov/feeds/json/cve/1.0/nvdcve-1.0-{feed}.json.gz'
 
@@ -339,31 +353,42 @@ class JSONFeed(object):
 
     @property
     def name(self):
+        """Get feed name."""
         return self._name
 
     @property
     def data(self):
+        """Get parsed data."""
         return self._data
 
     @property
     def sha256(self):
+        """Get sha256 hash."""
         return utils.compute_sha256(self._data_path)
 
     @property
     def filename(self):
+        """Get filename."""
         return self._data_filename
 
     @property
     def path(self):
+        """Get path."""
         return self._data_path
 
     def is_loaded(self):
+        """Check if feed has been successfully loaded or not."""
         return self._is_loaded
 
     def is_downloaded(self):
+        """Check if feed has been downloaded or not."""
         return self._is_downloaded
 
     def is_ready(self):
+        """Check if feed is ready.
+
+        ready = downloaded and loaded.
+        """
         return self._is_downloaded and self._is_loaded
 
     async def download(self, loop: asyncio.BaseEventLoop = None, load=False):
@@ -453,6 +478,7 @@ class JSONFeed(object):
 
 
 class FeedManager(object):
+    """Manager for NVD feeds."""
 
     DEFAULT_FEED = 'recent'
     MAX_NUM_WORKERS = 10
@@ -505,17 +531,21 @@ class FeedManager(object):
 
     @property
     def feed_names(self) -> list:
+        """Get feed names."""
         return list(self._feed_names)
 
     @property
     def feeds(self) -> dict:
+        """Get feeds."""
         return self._feeds
 
     @property
     def event_loop(self) -> asyncio.BaseEventLoop:
+        """Get event loop."""
         return self._loop
 
     def set_event_loop(self, loop: asyncio.BaseEventLoop):
+        """Set event loop."""
         self._loop = loop
 
     def download_feeds(self,
@@ -603,10 +633,11 @@ class FeedManager(object):
 
         This method is the recommended method for most use cases.
 
-        NOTES:
+        Notes:
             - Updates are not performed to existing feeds if not explicitly specified.
             - Proxies of feeds are used, in order to load the feed into memory directly, FeedManager.load_feeds()
             need to be called on desired list of feeds.
+
         """
         data_dir = data_dir or self._data_dir
         feed_names = list(map(self.parse_feed_name, feed_names))
@@ -647,7 +678,6 @@ class FeedManager(object):
                 feeds: Union[typing.Dict[str, JSONFeed],
                              typing.List[Union[str, int, JSONFeed]]] = None):
         """Return collection of Documents to run queries on."""
-
         def iter_feeds():
             # this function runs on multiple threads, need to pass the event loop
             # to each of them
@@ -756,6 +786,7 @@ class FeedManager(object):
 
     @staticmethod
     def get_default_event_loop():
+        """Get default event loop."""
         loop = asyncio.new_event_loop()
         executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=FeedManager.MAX_NUM_WORKERS
@@ -766,6 +797,7 @@ class FeedManager(object):
 
     @staticmethod
     def parse_feed_name(feed_name):
+        """Parse feed names."""
         match = re.fullmatch(FEED_NAME_PATTERN, str(feed_name), re.IGNORECASE)
 
         if match:

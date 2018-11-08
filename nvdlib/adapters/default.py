@@ -110,6 +110,7 @@ class DefaultAdapter(BaseAdapter):
 
     @property
     def shard_size(self):
+        """Get shard size."""
         return self._shard_size
 
     def set_shard_size(self, size: int):
@@ -127,7 +128,6 @@ class DefaultAdapter(BaseAdapter):
 
     def connect(self, storage: str = None):
         """Connect adapter adapter to a storage."""
-
         if not any([storage, self._storage]):
             raise ValueError("Storage has not been provided.")
 
@@ -164,7 +164,6 @@ class DefaultAdapter(BaseAdapter):
 
     def process(self, data: typing.Iterable["Document"]):
         """Process given data and store in connected storage."""
-
         index = 0
         count = 0
 
@@ -445,6 +444,7 @@ class Cursor(BaseCursor):
 
     @property
     def index(self):
+        """Get index."""
         return self._index
 
     def next(self) -> Document:
@@ -476,7 +476,6 @@ class Cursor(BaseCursor):
 
     def get_iterator(self) -> typing.Iterator:
         """Iterate over stored data."""
-
         if self._data:
             yield from iter(self._data)
 

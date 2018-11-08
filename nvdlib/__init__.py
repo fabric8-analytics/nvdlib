@@ -1,3 +1,5 @@
+"""Logging configuration and utilities."""
+
 import logging
 
 from nvdlib import config
@@ -24,7 +26,8 @@ def set_logging_level(level):
 def set_logging_handler(handler=None):
     """Set logging handler.
 
-    If no handler is provided, the default one is set"""
+    If no handler is provided, the default one is set
+    """
     if handler:
         logger.addHandler(handler)
 

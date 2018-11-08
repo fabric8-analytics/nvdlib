@@ -87,6 +87,10 @@ from nvdlib import utils
 
 
 class Entry(ABC):
+    """Abstract entry.
+
+    Base class for all other types of entries, for example: CVE description, reference, etc.
+    """
 
     def __init__(self, *data):
         self._data = [
@@ -123,6 +127,7 @@ class Entry(ABC):
 
     @property
     def data(self):
+        """Get data."""
         return self._data
 
     @abstractmethod
@@ -158,8 +163,10 @@ class Entry(ABC):
 
 
 class DescriptionEntry(Entry):
+    """CVE descriptions."""
 
     class DescriptionNode(namedtuple('DescriptionNode', ['lang', 'value'])):
+        """CVE description in a particular language."""
 
         # noinspection PyInitNewSignature
         def __new__(cls, lang: str = None, value: str = None, **kwargs):
@@ -178,12 +185,15 @@ class DescriptionEntry(Entry):
         super(DescriptionEntry, self).__init__(*description_data)
 
     def parse(self, entry: typing.Any):
+        """Parse description data."""
         return self.DescriptionNode(**entry)
 
 
 class ReferenceEntry(Entry):
+    """CVE references."""
 
     class ReferenceNode(namedtuple('Reference', ['url', 'name', 'refsource'])):
+        """CVE reference."""
 
         # noinspection PyInitNewSignature
         def __new__(cls, url: str = None, name: str = None, refsource: str = None, **kwargs):
@@ -203,12 +213,15 @@ class ReferenceEntry(Entry):
         super(ReferenceEntry, self).__init__(*reference_data)
 
     def parse(self, entry: typing.Any):
+        """Parse reference data."""
         return self.ReferenceNode(**entry)
 
 
 class AffectsEntry(Entry):
+    """Affected products."""
 
     class ProductNode(namedtuple('ProductNode', ['vendor_name', 'product_name', 'versions'])):
+        """Affected product."""
 
         # noinspection PyInitNewSignature
         def __new__(cls,
@@ -247,13 +260,16 @@ class AffectsEntry(Entry):
         super(AffectsEntry, self).__init__(*affects_data)
 
     def parse(self, entry: typing.Any):
+        """Parse affected product data."""
         return self.ProductNode(*entry)
 
 
 class ConfigurationsEntry(Entry):
+    """Affected configurations."""
 
     class ConfigurationsNode(namedtuple('ConfigurationsNode',
                                         ['vulnerable', 'cpe', 'version_range'])):
+        """Affected configuration."""
 
         # noinspection PyInitNewSignature
         def __new__(cls,
@@ -275,9 +291,11 @@ class ConfigurationsEntry(Entry):
 
     @property
     def operator(self) -> str:
+        """Logical operator between configurations."""
         return self.operator
 
     def parse(self, entry: typing.Any):
+        """Parse configuration."""
         try:
             version_exact = CPE(entry['cpe23Uri']).get_version()[0] or None
         except NotImplementedError:
@@ -340,19 +358,21 @@ class Configurations(namedtuple('Configurations', [
         )
 
     def pretty(self):
+        """Pretty print."""
         pprint(utils.dictionarize(self))
 
 
 class Impact(namedtuple('Impact', [
     'severity', 'exploitability_score', 'impact_score', 'cvss'
 ])):
-    """Representation of NVD Configurations object."""
+    """Representation of NVD Impact object."""
 
     class CVSSNode(namedtuple('CVSSNode', [
         'version', 'access_vector', 'access_complexity', 'authentication',
         'confidentiality_impact', 'integrity_impact', 'availability_impact',
         'base_score'
     ])):
+        """Representation of NVD CVSS object."""
 
         def __new__(cls,
                     version: str = None,
@@ -396,6 +416,7 @@ class Impact(namedtuple('Impact', [
 
     @classmethod
     def from_data(cls, data: dict):
+        """Build object from dict."""
         if not data:
             return cls(**{})
 
@@ -425,6 +446,7 @@ class Impact(namedtuple('Impact', [
         )
 
     def pretty(self):
+        """Pretty print."""
         pprint(utils.dictionarize(self))
 
 
@@ -462,6 +484,7 @@ class CVE(namedtuple('CVE', [
 
     @classmethod
     def from_data(cls, data):
+        """Build object from dict."""
         meta = data['CVE_data_meta']
         id_ = meta['ID']
         assigner = meta['ASSIGNER']
@@ -484,6 +507,7 @@ class CVE(namedtuple('CVE', [
             descriptions=descriptions)
 
     def pretty(self):
+        """Pretty print."""
         pprint(utils.dictionarize(self))
 
 
@@ -524,6 +548,7 @@ class Document(namedtuple('Document', [
 
     @classmethod
     def from_data(cls, data: dict):
+        """Build object from data."""
         if not data:
             return cls(**{})
 
@@ -575,4 +600,5 @@ class Document(namedtuple('Document', [
         return utils.AttrDict(**projection)
 
     def pretty(self):
+        """Pretty print."""
         pprint(utils.dictionarize(self))

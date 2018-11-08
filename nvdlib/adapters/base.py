@@ -48,10 +48,12 @@ class BaseAdapter(ABC):
 
     @property
     def storage(self) -> typing.Any:
+        """Get storage object associated with this adapter."""
         return self._storage
 
     @property
     def name(self):
+        """Get adapter name."""
         return self._name
 
     @abstractmethod

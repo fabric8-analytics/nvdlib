@@ -16,6 +16,7 @@ from nvdlib.model import Document
 
 
 class TestUtils(unittest.TestCase):
+    """Tests for utils module."""
 
     def test_rhasattr(self):
         """Test `utils.rhasattr` function."""
@@ -47,7 +48,6 @@ class TestUtils(unittest.TestCase):
 
     def test_rgetattr(self):
         """Test `utils.rgetattr` function."""
-
         obj = utils.AttrDict(
             **{
                 'foo': {
