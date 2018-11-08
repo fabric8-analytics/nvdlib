@@ -401,8 +401,7 @@ class Impact(namedtuple('Impact', [
                 severity: str = None,
                 exploitability_score: float = None,
                 impact_score: float = None,
-                cvss: CVSSNode = None,
-                **kwarsg):
+                cvss: CVSSNode = None):
 
         cvss: Impact.CVSSNode = cvss or Impact.CVSSNode()
 
