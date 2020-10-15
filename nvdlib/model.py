@@ -494,7 +494,7 @@ class CVE(namedtuple('CVE', [
 
         data_version = data['data_version']
 
-        affects = AffectsEntry(data['affects'])
+        affects = AffectsEntry(data['affects']) if data.get('affects') else None
         references = ReferenceEntry(data['references'])
         descriptions = DescriptionEntry(data['description'])
 

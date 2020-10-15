@@ -97,7 +97,7 @@ class TestJSONFeedMetadata(unittest.TestCase):
     def test_fetch(self):
         """Test TestJSONFeedMetadata `fetch` method."""
         # existing
-        feed_name = 'sample'
+        feed_name = 'recent'
         meta = JSONFeedMetadata(feed_name=feed_name,
                                 data_dir=_TEST_DATA_DIR)
 
@@ -178,7 +178,7 @@ class TestJSONFeedMetadata(unittest.TestCase):
     def test_metadata_exist(self):
         """Test TestJSONFeedMetadata `metadata_exist` method."""
         # existing
-        feeds = ['sample']
+        feeds = ['modified']
 
         futures = [
             asyncio.ensure_future(
@@ -415,7 +415,7 @@ class TestFeedManager(unittest.TestCase):
 
     def test_collect(self):
         """Test FeedManager `collect` method."""
-        feed_names = ['sample']
+        feed_names = ['modified']
 
         with FeedManager(data_dir=_TEST_DATA_DIR) as feed_manager:
             # load feeds
@@ -423,7 +423,7 @@ class TestFeedManager(unittest.TestCase):
             feed_names = list(feed_dict.keys())
             feeds = list(feed_dict.values())
 
-            self.assertEqual(feed_names, ['sample'])
+            self.assertEqual(feed_names, ['modified'])
             self.assertIsInstance(feeds[0], JSONFeed)
 
             # ---
@@ -447,7 +447,7 @@ class TestFeedManager(unittest.TestCase):
 
         # ---
         # existing feeds, local
-        FeedManager.feeds_check('sample', data_dir=_TEST_DATA_DIR)
+        FeedManager.feeds_check('recent', data_dir=_TEST_DATA_DIR)
 
         # ---
         # non-existing
@@ -460,7 +460,7 @@ class TestFeedManager(unittest.TestCase):
     def test_feeds_exist(self):
         """Test FeedManager `feeds_exist` method."""
         # existing
-        feeds = ['sample']
+        feeds = ['recent']
         self.assertTrue(FeedManager.feeds_exist(*feeds, data_dir=_TEST_DATA_DIR))
 
         # non-existing
