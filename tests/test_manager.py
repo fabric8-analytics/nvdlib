@@ -25,7 +25,7 @@ class TestJSONFeedMetadata(unittest.TestCase):
         meta_temp_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
         # existing, update=False
-        feed_name = 'sample'
+        feed_name = 'recent'
         meta = JSONFeedMetadata(feed_name=feed_name, data_dir=meta_temp_dir)
 
         # meta object created
@@ -65,7 +65,7 @@ class TestJSONFeedMetadata(unittest.TestCase):
 
     def test__parse_metadata(self):
         """Test JSONFeedMetadata `_parse_metadata` method."""
-        meta_file = Path(__file__).parent / 'data/nvdcve-1.0-sample.meta'
+        meta_file = Path(__file__).parent / 'data/nvdcve-1.1-recent.meta'
         with open(meta_file, 'r') as f:
             meta_data = f.read()
 
@@ -164,7 +164,7 @@ class TestJSONFeedMetadata(unittest.TestCase):
         self.assertTrue(all([r is True for r in results]))
 
         # non-existing
-        feeds = ['nope', 'non-existing', 0, 1E+5]
+        feeds = ['nope', 'non-existing']
 
         futures = [
             asyncio.ensure_future(JSONFeedMetadata.url_exists(feed))
@@ -209,7 +209,7 @@ class TestFeed(unittest.TestCase):
 
     def test___init__(self):
         """Test Feed initialization."""
-        feed_name = 'sample'
+        feed_name = 'recent'
         json_dir = tempfile.mkdtemp(dir=_TEMP_DATA_DIR)
 
         # non-existing
@@ -258,7 +258,7 @@ class TestFeed(unittest.TestCase):
     def test_load(self):
         """Test Feed `load` methods."""
         # test load existing
-        feed_name = 'sample'
+        feed_name = 'recent'
         json_feed = JSONFeed(feed_name, data_dir=_TEST_DATA_DIR)
 
         _EVENT_LOOP.run_until_complete(
@@ -285,7 +285,7 @@ class TestFeed(unittest.TestCase):
 
     def test_flush(self):
         """Test Feed `flush` method."""
-        feed_name = 'sample'
+        feed_name = 'recent'
         json_feed = JSONFeed(feed_name, data_dir=_TEST_DATA_DIR)
 
         # load the data
@@ -354,7 +354,7 @@ class TestFeedManager(unittest.TestCase):
             self.assertTrue(os.listdir(_TEMP_DATA_DIR))
 
             # existing, download-load
-            feeds = feed_manager.download_feeds(['sample'],
+            feeds = feed_manager.download_feeds(['recent'],
                                                 data_dir=_TEST_DATA_DIR,
                                                 load=True)
 
@@ -386,7 +386,7 @@ class TestFeedManager(unittest.TestCase):
             # existing
 
             # loaded feeds
-            feeds = feed_manager.load_feeds(['sample'], data_dir=_TEST_DATA_DIR)
+            feeds = feed_manager.load_feeds(['recent'], data_dir=_TEST_DATA_DIR)
 
             self.assertTrue(feeds)
             self.assertTrue(all(feed.is_loaded() for feed in feeds.values()))
@@ -408,7 +408,7 @@ class TestFeedManager(unittest.TestCase):
             # existing
 
             # loaded feeds
-            feeds = feed_manager.fetch_feeds(['sample'], data_dir=_TEST_DATA_DIR)
+            feeds = feed_manager.fetch_feeds(['recent'], data_dir=_TEST_DATA_DIR)
 
             self.assertTrue(feeds)
             self.assertTrue(not any(feed.is_loaded() for feed in feeds.values()))
