@@ -18,8 +18,8 @@ load_jenkins_vars() {
 
 prep() {
     yum -y update
-    yum -y install epel-release https://centos7.iuscommunity.org/ius-release.rpm
-    yum -y install git gcc python36u python36u-devel python36u-pip which
+    yum install -y epel-release
+    yum install -y git which gcc python36-devel python36-pip python36-requests openssl-devel
 }
 
 load_jenkins_vars

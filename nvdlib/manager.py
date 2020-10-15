@@ -39,8 +39,8 @@ _LOGGER = logging.getLogger(__name__)
 class JSONFeedMetadata(object):
     """Metadata for NVD feed."""
 
-    METADATA_URL_TEMPLATE = "https://nvd.nist.gov/feeds/json/cve/1.0/nvdcve-1.0-{feed}.meta"
-    METADATA_FILE_TEMPLATE = "nvdcve-1.0-{feed}.meta"
+    METADATA_URL_TEMPLATE = "https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-{feed}.meta"
+    METADATA_FILE_TEMPLATE = "nvdcve-1.1-{feed}.meta"
 
     def __init__(self, feed_name, data_dir=None):
         self._name = feed_name
@@ -325,7 +325,7 @@ class JSONFeedMetadata(object):
 class JSONFeed(object):
     """NVD's JSON feed."""
 
-    DATA_URL_TEMPLATE = 'https://static.nvd.nist.gov/feeds/json/cve/1.0/nvdcve-1.0-{feed}.json.gz'
+    DATA_URL_TEMPLATE = 'https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-{feed}.json.gz'
 
     def __init__(self, feed_name: str, data_dir: str = None):
         self._name = feed_name
@@ -334,7 +334,7 @@ class JSONFeed(object):
         self._data_dir = data_dir or config.DEFAULT_DATA_DIR
 
         self._data_url = self.DATA_URL_TEMPLATE.format(feed=self._name)
-        self._data_filename = 'nvdcve-1.0-{feed}.json'.format(feed=self._name)
+        self._data_filename = 'nvdcve-1.1-{feed}.json'.format(feed=self._name)
         self._data_path = Path(self._data_dir) / self._data_filename
 
         self._metadata = JSONFeedMetadata(
@@ -415,7 +415,7 @@ class JSONFeed(object):
         loop = loop or asyncio.get_event_loop()
 
         status = ["Downloading", "Updating"][self._is_downloaded]
-        _LOGGER.info(f"{status} feed `{self._name}`...")
+        _LOGGER.info(f"{status} feed `{self._name}` url `{self._data_url}`...")
 
         data: bytes
         timeout = aiohttp.ClientTimeout(total=config.FEED_DOWNLOAD_TIMEOUT)
